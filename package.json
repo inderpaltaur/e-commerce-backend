@@ -2,6 +2,7 @@
   "name": "ecommerce-backend",
   "version": "1.0.0",
   "description": "E-commerce REST API with Firebase and Express",
+  "type": "module",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",

@@ -1,8 +1,10 @@
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const morgan = require('morgan');
-require('dotenv').config();
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const app = express();
 
@@ -23,11 +25,11 @@ app.get('/', (req, res) => {
 });
 
 // Import routes
-const authRoutes = require('./routes/auth.routes');
-const productRoutes = require('./routes/product.routes');
-const categoryRoutes = require('./routes/category.routes');
-const orderRoutes = require('./routes/order.routes');
-const userRoutes = require('./routes/user.routes');
+import authRoutes from './routes/auth.routes.js';
+import productRoutes from './routes/product.routes.js';
+import categoryRoutes from './routes/category.routes.js';
+import orderRoutes from './routes/order.routes.js';
+import userRoutes from './routes/user.routes.js';
 
 // Use routes
 app.use('/api/auth', authRoutes);
@@ -61,4 +63,4 @@ app.listen(PORT, () => {
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
-module.exports = app;
+export default app;

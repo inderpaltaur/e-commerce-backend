@@ -1,6 +1,6 @@
-const { db } = require('../config/firebase');
+import { db } from '../config/firebase.js';
 
-const productController = {
+export const productController = {
   // Get all products
   getAllProducts: async (req, res) => {
     try {
@@ -201,4 +201,4 @@ const productController = {
   }
 };
 
-module.exports = productController;
+export default productController;

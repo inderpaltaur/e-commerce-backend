@@ -1,9 +1,10 @@
-const express = require('express');
+import express from 'express';
+import { body } from 'express-validator';
+import { validate } from '../middleware/validation.middleware.js';
+import { verifyToken, checkAdmin } from '../middleware/auth.middleware.js';
+import categoryController from '../controllers/category.controller.js';
+
 const router = express.Router();
-const { body } = require('express-validator');
-const { validate } = require('../middleware/validation.middleware');
-const { verifyToken, checkAdmin } = require('../middleware/auth.middleware');
-const categoryController = require('../controllers/category.controller');
 
 // Get all categories (public)
 router.get('/', categoryController.getAllCategories);
@@ -40,4 +41,4 @@ router.delete(
   categoryController.deleteCategory
 );
 
-module.exports = router;
+export default router;

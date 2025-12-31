@@ -1,9 +1,10 @@
-const express = require('express');
+import express from 'express';
+import { body } from 'express-validator';
+import { validate } from '../middleware/validation.middleware.js';
+import { verifyToken, checkAdmin } from '../middleware/auth.middleware.js';
+import productController from '../controllers/product.controller.js';
+
 const router = express.Router();
-const { body } = require('express-validator');
-const { validate } = require('../middleware/validation.middleware');
-const { verifyToken, checkAdmin } = require('../middleware/auth.middleware');
-const productController = require('../controllers/product.controller');
 
 // Get all products (public)
 router.get('/', productController.getAllProducts);
@@ -46,4 +47,4 @@ router.delete(
   productController.deleteProduct
 );
 
-module.exports = router;
+export default router;

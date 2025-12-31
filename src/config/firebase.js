@@ -1,10 +1,12 @@
-const admin = require('firebase-admin');
+import admin from 'firebase-admin';
+import { readFileSync } from 'fs';
 
 let serviceAccount;
 
 try {
   if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
-    serviceAccount = require(process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
+    const serviceAccountData = readFileSync(process.env.FIREBASE_SERVICE_ACCOUNT_PATH, 'utf8');
+    serviceAccount = JSON.parse(serviceAccountData);
   }
 } catch (error) {
   console.warn('Firebase service account file not found. Using environment variables.');
@@ -27,9 +29,4 @@ const db = admin.firestore();
 const auth = admin.auth();
 const storage = admin.storage();
 
-module.exports = {
-  admin,
-  db,
-  auth,
-  storage
-};
+export { admin, db, auth, storage };

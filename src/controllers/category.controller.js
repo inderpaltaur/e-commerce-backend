@@ -1,6 +1,6 @@
-const { db } = require('../config/firebase');
+import { db } from '../config/firebase.js';
 
-const categoryController = {
+export const categoryController = {
   // Get all categories
   getAllCategories: async (req, res) => {
     try {
@@ -153,4 +153,4 @@ const categoryController = {
   }
 };
 
-module.exports = categoryController;
+export default categoryController;

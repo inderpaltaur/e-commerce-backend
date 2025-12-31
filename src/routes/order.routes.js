@@ -1,9 +1,10 @@
-const express = require('express');
+import express from 'express';
+import { body } from 'express-validator';
+import { validate } from '../middleware/validation.middleware.js';
+import { verifyToken, checkAdmin } from '../middleware/auth.middleware.js';
+import orderController from '../controllers/order.controller.js';
+
 const router = express.Router();
-const { body } = require('express-validator');
-const { validate } = require('../middleware/validation.middleware');
-const { verifyToken, checkAdmin } = require('../middleware/auth.middleware');
-const orderController = require('../controllers/order.controller');
 
 // Get user orders (authenticated)
 router.get('/my-orders', verifyToken, orderController.getUserOrders);
@@ -43,4 +44,4 @@ router.put(
 // Cancel order (authenticated)
 router.put('/:id/cancel', verifyToken, orderController.cancelOrder);
 
-module.exports = router;
+export default router;

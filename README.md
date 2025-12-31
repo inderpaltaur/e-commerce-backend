@@ -1,15 +1,17 @@
 # E-Commerce Backend API
 
-REST API for E-Commerce application built with Express.js and Firebase.
+REST API for E-Commerce Clothing Store built with Express.js and Firebase.
 
 ## Features
 
-- User authentication and authorization
-- Product management
+- User authentication (Email/Password and Social Auth)
+- User profile management with wishlist
+- Product management with filtering
 - Category management
-- Order processing
-- User profile management
+- Order processing with stock management
 - Admin role-based access control
+- Account status management (active, blocked, suspended)
+- Email and phone verification
 
 ## Tech Stack
 
@@ -27,26 +29,29 @@ REST API for E-Commerce application built with Express.js and Firebase.
 backend/
 ├── src/
 │   ├── config/
-│   │   └── firebase.js          # Firebase configuration
+│   │   └── firebase.js              # Firebase configuration
 │   ├── controllers/
-│   │   ├── auth.controller.js   # Authentication logic
-│   │   ├── category.controller.js
-│   │   ├── order.controller.js
-│   │   ├── product.controller.js
-│   │   └── user.controller.js
+│   │   ├── auth.controller.js       # Authentication logic
+│   │   ├── category.controller.js   # Category CRUD
+│   │   ├── order.controller.js      # Order management
+│   │   ├── product.controller.js    # Product CRUD
+│   │   └── user.controller.js       # User profile & wishlist
 │   ├── middleware/
-│   │   ├── auth.middleware.js   # JWT verification & admin check
-│   │   └── validation.middleware.js
+│   │   ├── auth.middleware.js       # JWT verification & admin check
+│   │   └── validation.middleware.js # Request validation
 │   ├── routes/
-│   │   ├── auth.routes.js
-│   │   ├── category.routes.js
-│   │   ├── order.routes.js
-│   │   ├── product.routes.js
-│   │   └── user.routes.js
-│   └── server.js                # Express app entry point
+│   │   ├── auth.routes.js           # Auth endpoints
+│   │   ├── category.routes.js       # Category endpoints
+│   │   ├── order.routes.js          # Order endpoints
+│   │   ├── product.routes.js        # Product endpoints
+│   │   └── user.routes.js           # User & wishlist endpoints
+│   └── server.js                    # Express app entry point
+├── docs/
+│   └── API_DOCUMENTATION.md         # Complete API documentation
 ├── .env.example
 ├── .gitignore
-└── package.json
+├── package.json
+└── README.md
 ```
 
 ## Setup Instructions
@@ -62,7 +67,10 @@ npm install
 1. Go to [Firebase Console](https://console.firebase.google.com/)
 2. Create a new project or select existing one
 3. Enable Firestore Database
-4. Enable Authentication (Email/Password)
+4. Enable Authentication:
+   - Email/Password
+   - Google (optional)
+   - Facebook (optional)
 5. Generate a service account key:
    - Go to Project Settings > Service Accounts
    - Click "Generate New Private Key"
@@ -101,22 +109,37 @@ The server will start on `http://localhost:5000`
 
 ## API Endpoints
 
+For complete API documentation with request/response examples, see [API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md)
+
 ### Authentication
 - `POST /api/auth/register` - Register new user
 - `POST /api/auth/login` - Login user
+- `POST /api/auth/social-auth` - Social authentication (Google, Facebook)
 - `POST /api/auth/verify` - Verify token
 
+### Users
+- `GET /api/users/profile` - Get user profile (Auth)
+- `PUT /api/users/profile` - Update user profile (Auth)
+- `GET /api/users/wishlist` - Get wishlist with product details (Auth)
+- `POST /api/users/wishlist` - Add to wishlist (Auth)
+- `DELETE /api/users/wishlist/:productId` - Remove from wishlist (Auth)
+- `POST /api/users/verify-phone` - Verify phone number (Auth)
+- `POST /api/users/verify-email` - Verify email (Auth)
+- `GET /api/users` - Get all users (Admin)
+- `PUT /api/users/:uid/set-admin` - Set admin role (Admin)
+- `PUT /api/users/:uid/account-status` - Update account status (Admin)
+
 ### Products
-- `GET /api/products` - Get all products
-- `GET /api/products/:id` - Get single product
-- `GET /api/products/category/:categoryId` - Get products by category
+- `GET /api/products` - Get all products (Public)
+- `GET /api/products/:id` - Get single product (Public)
+- `GET /api/products/category/:categoryId` - Get products by category (Public)
 - `POST /api/products` - Create product (Admin)
 - `PUT /api/products/:id` - Update product (Admin)
 - `DELETE /api/products/:id` - Delete product (Admin)
 
 ### Categories
-- `GET /api/categories` - Get all categories
-- `GET /api/categories/:id` - Get single category
+- `GET /api/categories` - Get all categories (Public)
+- `GET /api/categories/:id` - Get single category (Public)
 - `POST /api/categories` - Create category (Admin)
 - `PUT /api/categories/:id` - Update category (Admin)
 - `DELETE /api/categories/:id` - Delete category (Admin)
@@ -129,12 +152,6 @@ The server will start on `http://localhost:5000`
 - `PUT /api/orders/:id/status` - Update order status (Admin)
 - `PUT /api/orders/:id/cancel` - Cancel order (Auth)
 
-### Users
-- `GET /api/users/profile` - Get user profile (Auth)
-- `PUT /api/users/profile` - Update user profile (Auth)
-- `GET /api/users` - Get all users (Admin)
-- `PUT /api/users/:uid/set-admin` - Set admin role (Admin)
-
 ## Authentication
 
 Protected routes require a Firebase ID token in the Authorization header:
@@ -145,12 +162,31 @@ Authorization: Bearer <firebase-id-token>
 
 ## Firestore Collections
 
-The API uses the following Firestore collections:
+### Users Collection
 
-- `users` - User profiles
-- `products` - Product catalog
-- `categories` - Product categories
-- `orders` - Customer orders
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `uid` | String | Yes | Firebase Auth UID |
+| `name` | String | Yes | User's full name |
+| `email` | String | Yes | Email address |
+| `phoneNumber` | String | No | Phone number |
+| `photoURL` | String | No | Profile photo URL |
+| `role` | String | Yes | `customer` or `admin` |
+| `authProvider` | String | Yes | `Email`, `Google`, `Facebook`, etc. |
+| `isPhoneVerified` | Boolean | Yes | Phone verification status |
+| `isEmailVerified` | Boolean | Yes | Email verification status |
+| `accountStatus` | String | Yes | `active`, `blocked`, or `suspended` |
+| `lastLogin` | String (ISO) | Yes | Last login timestamp |
+| `address` | Object/String | No | Shipping address |
+| `wishlist` | Array | Yes | Array of product IDs |
+| `createdAt` | String (ISO) | Yes | Account creation timestamp |
+| `updatedAt` | String (ISO) | Yes | Last update timestamp |
+
+### Other Collections
+
+- **products** - Product catalog with name, price, stock, category, etc.
+- **categories** - Product categories
+- **orders** - Customer orders with items, status, shipping address
 
 ## Security
 

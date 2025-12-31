@@ -1,6 +1,6 @@
-const { auth } = require('../config/firebase');
+import { auth } from '../config/firebase.js';
 
-const verifyToken = async (req, res, next) => {
+export const verifyToken = async (req, res, next) => {
   try {
     const token = req.headers.authorization?.split('Bearer ')[1];
 
@@ -23,7 +23,7 @@ const verifyToken = async (req, res, next) => {
   }
 };
 
-const checkAdmin = async (req, res, next) => {
+export const checkAdmin = async (req, res, next) => {
   try {
     if (!req.user) {
       return res.status(401).json({
@@ -49,9 +49,4 @@ const checkAdmin = async (req, res, next) => {
       error: error.message
     });
   }
-};
-
-module.exports = {
-  verifyToken,
-  checkAdmin
 };
