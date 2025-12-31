@@ -730,19 +730,28 @@ Update a user's account status.
 ### 1. Get All Products
 **GET** `/products`
 
-Get all products (public access).
+Get all products with advanced filtering and search (public access).
 
 **Auth Required:** No
 
 **Query Parameters:**
-- `limit` (default: 50)
-- `category` - Filter by category ID
+- `limit` (default: 50) - Number of products to return
+- `category` - Filter by category slug (`men`, `women`, `kids`, `ethnic`)
+- `subCategory` - Filter by subcategory slug
+- `productType` - Filter by product type
 - `minPrice` - Minimum price filter
 - `maxPrice` - Maximum price filter
+- `tags` - Filter by tag (single tag)
+- `isFeatured` - Filter featured products (`true`/`false`)
+- `isActive` - Filter by active status (`true`/`false`/`all`, default: `true`)
+- `sortBy` - Sort field (`price`, `createdAt`, `soldCount`, `rating.average`, default: `createdAt`)
+- `sortOrder` - Sort order (`asc`/`desc`, default: `desc`)
+- `search` - Search in product name, description, and tags
 
 **Example:**
 ```
-GET /products?category=cat-id-123&minPrice=20&maxPrice=100&limit=20
+GET /products?category=men&subCategory=ethnic&minPrice=500&maxPrice=2000&sortBy=price&sortOrder=asc&limit=20
+GET /products?search=cotton&isFeatured=true&limit=10
 ```
 
 **Response (200):**
@@ -752,17 +761,45 @@ GET /products?category=cat-id-123&minPrice=20&maxPrice=100&limit=20
   "count": 20,
   "data": [
     {
-      "id": "product-id-1",
-      "name": "Cotton T-Shirt",
-      "description": "Comfortable cotton t-shirt",
-      "price": 29.99,
-      "categoryId": "cat-id-123",
-      "stock": 100,
-      "imageUrl": "https://example.com/tshirt.jpg",
-      "createdAt": "2025-01-01T08:00:00.000Z",
-      "updatedAt": "2025-01-01T08:00:00.000Z"
-    },
-    ...
+      "id": "prod_abc123",
+      "productId": "prod_abc123",
+      "productName": "Cotton Casual Kurta",
+      "productDescription": "Comfortable cotton kurta for everyday wear",
+      "category": "men",
+      "subCategory": "ethnic",
+      "productType": "kurta",
+      "price": 999,
+      "finalPrice": 799.20,
+      "priceWithTax": 943.06,
+      "currencyType": "INR",
+      "offerType": "percentage",
+      "offerValue": 20,
+      "tax": 18,
+      "sizes": ["S", "M", "L", "XL"],
+      "colors": [
+        {
+          "colorName": "White",
+          "colorCode": "#FFFFFF",
+          "colorImage": "https://example.com/kurta-white.jpg",
+          "stock": 50
+        }
+      ],
+      "images": ["https://example.com/kurta1.jpg", "https://example.com/kurta2.jpg"],
+      "units": 125,
+      "soldCount": 78,
+      "inStock": true,
+      "tags": ["ethnic", "casual", "cotton"],
+      "rating": {
+        "average": 4.5,
+        "count": 128,
+        "distribution": {"5": 80, "4": 30, "3": 10, "2": 5, "1": 3}
+      },
+      "brand": "Urban Fashion",
+      "isFeatured": true,
+      "isActive": true,
+      "createdAt": "2025-12-01T10:00:00.000Z",
+      "updatedAt": "2025-12-31T14:30:00.000Z"
+    }
   ]
 }
 ```
@@ -772,7 +809,7 @@ GET /products?category=cat-id-123&minPrice=20&maxPrice=100&limit=20
 ### 2. Get Product by ID
 **GET** `/products/:id`
 
-Get a single product by ID (public access).
+Get a single product by ID with calculated fields (public access).
 
 **Auth Required:** No
 
@@ -781,35 +818,111 @@ Get a single product by ID (public access).
 {
   "success": true,
   "data": {
-    "id": "product-id-1",
-    "name": "Cotton T-Shirt",
-    "description": "Comfortable cotton t-shirt",
-    "price": 29.99,
-    "categoryId": "cat-id-123",
-    "stock": 100,
-    "imageUrl": "https://example.com/tshirt.jpg",
-    ...
+    "id": "prod_abc123",
+    "productId": "prod_abc123",
+    "productName": "Cotton Casual Kurta",
+    "productDescription": "Comfortable cotton kurta...",
+    "category": "men",
+    "subCategory": "ethnic",
+    "productType": "kurta",
+    "price": 999,
+    "finalPrice": 799.20,
+    "priceWithTax": 943.06,
+    "currencyType": "INR",
+    "offerType": "percentage",
+    "offerValue": 20,
+    "tax": 18,
+    "sizes": ["S", "M", "L", "XL"],
+    "colors": [...],
+    "images": [...],
+    "units": 125,
+    "soldCount": 78,
+    "inStock": true,
+    "rating": {...},
+    "brand": "Urban Fashion",
+    "material": "100% Cotton",
+    "careInstructions": "Machine wash cold...",
+    "weight": 200,
+    "dimensions": {"length": 72, "width": 52, "height": 2},
+    "sku": "MEN-KURTA-WHT-M-001",
+    "vendor": "Cotton Crafts Ltd",
+    "countryOfOrigin": "India",
+    "isFeatured": true,
+    "isActive": true,
+    "createdAt": "2025-12-01T10:00:00.000Z",
+    "updatedAt": "2025-12-31T14:30:00.000Z"
   }
+}
+```
+
+**Error Response (404):**
+```json
+{
+  "success": false,
+  "message": "Product not found"
 }
 ```
 
 ---
 
 ### 3. Get Products by Category
-**GET** `/products/category/:categoryId`
+**GET** `/products/category/:category`
 
 Get all products in a specific category (public access).
 
 **Auth Required:** No
 
+**URL Parameters:**
+- `category` - Category slug (`men`, `women`, `kids`, `ethnic`)
+
 **Query Parameters:**
 - `limit` (default: 50)
+- `subCategory` - Filter by subcategory
+- `isActive` (default: `true`) - Filter by active status
 
 **Response:** Same as Get All Products
 
 ---
 
-### 4. Create Product (Admin)
+### 4. Get Featured Products
+**GET** `/products/featured`
+
+Get featured products (public access).
+
+**Auth Required:** No
+
+**Query Parameters:**
+- `limit` (default: 10)
+
+**Response:** Same as Get All Products
+
+**Example:**
+```
+GET /products/featured?limit=20
+```
+
+---
+
+### 5. Get Trending Products
+**GET** `/products/trending`
+
+Get trending products sorted by sold count (public access).
+
+**Auth Required:** No
+
+**Query Parameters:**
+- `limit` (default: 20)
+
+**Response:** Same as Get All Products
+
+**Example:**
+```
+GET /products/trending?limit=15
+```
+
+---
+
+### 6. Create Product (Admin)
 **POST** `/products`
 
 Create a new product.
@@ -819,21 +932,71 @@ Create a new product.
 **Request Body:**
 ```json
 {
-  "name": "Cotton T-Shirt",
-  "description": "Comfortable cotton t-shirt",
-  "price": 29.99,
-  "categoryId": "cat-id-123",
-  "stock": 100,
-  "imageUrl": "https://example.com/tshirt.jpg"
+  "productName": "Cotton Casual Kurta",
+  "productDescription": "Comfortable cotton kurta perfect for everyday wear",
+  "category": "men",
+  "subCategory": "ethnic",
+  "productType": "kurta",
+  "price": 999,
+  "currencyType": "INR",
+  "offerType": "percentage",
+  "offerValue": 20,
+  "tax": 18,
+  "sizes": ["S", "M", "L", "XL"],
+  "colors": [
+    {
+      "colorName": "White",
+      "colorCode": "#FFFFFF",
+      "colorImage": "https://example.com/kurta-white.jpg",
+      "stock": 50
+    },
+    {
+      "colorName": "Blue",
+      "colorCode": "#0000FF",
+      "colorImage": "https://example.com/kurta-blue.jpg",
+      "stock": 75
+    }
+  ],
+  "images": [
+    "https://example.com/kurta1.jpg",
+    "https://example.com/kurta2.jpg"
+  ],
+  "units": 125,
+  "tags": ["ethnic", "casual", "cotton"],
+  "brand": "Urban Fashion",
+  "material": "100% Cotton",
+  "careInstructions": "Machine wash cold with like colors",
+  "weight": 200,
+  "dimensions": {"length": 72, "width": 52, "height": 2},
+  "sku": "MEN-KURTA-WHT-M-001",
+  "vendor": "Cotton Crafts Ltd",
+  "countryOfOrigin": "India",
+  "isFeatured": true
 }
 ```
 
 **Required Fields:**
-- `name`
-- `description`
-- `price` (numeric)
-- `categoryId`
-- `stock` (numeric)
+- `productName` (max 200 chars)
+- `productDescription` (max 2000 chars)
+- `category` (enum: `men`, `women`, `kids`, `unisex`)
+- `subCategory`
+- `productType`
+- `price` (positive number)
+- `sizes` (array, min 1 size)
+- `colors` (array, min 1 color with colorName, colorCode, stock)
+- `images` (array, min 1 image)
+- `units` (non-negative integer)
+
+**Optional Fields:**
+- `currencyType` (default: `INR`)
+- `offerType` (enum: `percentage`, `amount`, `none`, default: `none`)
+- `offerValue` (default: 0)
+- `tax` (0-100, default: 0)
+- `tags` (array)
+- `brand`, `material`, `careInstructions`
+- `weight`, `dimensions`, `sku`, `vendor`
+- `countryOfOrigin` (default: `India`)
+- `isFeatured` (default: `false`)
 
 **Response (201):**
 ```json
@@ -841,22 +1004,34 @@ Create a new product.
   "success": true,
   "message": "Product created successfully",
   "data": {
-    "id": "product-id-new",
+    "id": "prod_new123",
+    "productId": "prod_new123",
+    "productName": "Cotton Casual Kurta",
     ...
   }
 }
 ```
 
+**Error Response (400):**
+```json
+{
+  "success": false,
+  "message": "Missing required fields"
+}
+```
+
 ---
 
-### 5. Update Product (Admin)
+### 7. Update Product (Admin)
 **PUT** `/products/:id`
 
 Update an existing product.
 
 **Auth Required:** Yes (Admin)
 
-**Request Body:** Same as Create Product (all fields optional)
+**Request Body:** All fields optional (same as Create Product)
+
+**Note:** Cannot update `productId`, `soldCount`, `createdAt`, `rating`
 
 **Response (200):**
 ```json
@@ -864,7 +1039,8 @@ Update an existing product.
   "success": true,
   "message": "Product updated successfully",
   "data": {
-    "id": "product-id-1",
+    "id": "prod_abc123",
+    "productName": "Updated Product Name",
     ...
   }
 }
@@ -872,18 +1048,132 @@ Update an existing product.
 
 ---
 
-### 6. Delete Product (Admin)
-**DELETE** `/products/:id`
+### 8. Update Product Stock (Admin)
+**PUT** `/products/:id/stock`
 
-Delete a product.
+Update product inventory (overall units or color-specific stock).
 
 **Auth Required:** Yes (Admin)
+
+**Request Body (Update Overall Units):**
+```json
+{
+  "units": 200
+}
+```
+
+**Request Body (Update Color-Specific Stock):**
+```json
+{
+  "colorStock": [
+    {
+      "colorName": "White",
+      "stock": 60
+    },
+    {
+      "colorName": "Blue",
+      "stock": 80
+    }
+  ]
+}
+```
+
+**Note:** When updating `colorStock`, the system automatically recalculates `units` as the sum of all color stocks.
 
 **Response (200):**
 ```json
 {
   "success": true,
-  "message": "Product deleted successfully"
+  "message": "Stock updated successfully",
+  "data": {
+    "id": "prod_abc123",
+    "units": 140,
+    "colors": [
+      {"colorName": "White", "colorCode": "#FFFFFF", "stock": 60},
+      {"colorName": "Blue", "colorCode": "#0000FF", "stock": 80}
+    ]
+  }
+}
+```
+
+**Error Response (404):**
+```json
+{
+  "success": false,
+  "message": "Product not found"
+}
+```
+
+---
+
+### 9. Update Sold Count (Admin)
+**PUT** `/products/:id/sold`
+
+Increment the sold count when an order is completed.
+
+**Auth Required:** Yes (Admin)
+
+**Request Body:**
+```json
+{
+  "quantity": 5
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Sold count updated successfully",
+  "data": {
+    "soldCount": 83
+  }
+}
+```
+
+**Error Response (400):**
+```json
+{
+  "success": false,
+  "message": "Invalid quantity"
+}
+```
+
+---
+
+### 10. Delete Product (Admin)
+**DELETE** `/products/:id`
+
+Delete or deactivate a product.
+
+**Auth Required:** Yes (Admin)
+
+**Query Parameters:**
+- `permanent` (default: `false`) - Set to `true` for permanent deletion
+
+**Soft Delete (Default):**
+```
+DELETE /products/prod_abc123
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Product deactivated successfully"
+}
+```
+
+**Permanent Delete:**
+```
+DELETE /products/prod_abc123?permanent=true
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Product permanently deleted"
 }
 ```
 
@@ -894,7 +1184,110 @@ Delete a product.
 ### 1. Get All Categories
 **GET** `/categories`
 
-Get all categories (public access).
+Get all categories with subcategories (public access).
+
+**Auth Required:** No
+
+**Query Parameters:**
+- `isActive` - Filter by active status (`true`/`false`)
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "count": 4,
+  "data": [
+    {
+      "id": "cat_men_001",
+      "categoryId": "cat_men_001",
+      "categoryName": "Men",
+      "categorySlug": "men",
+      "description": "Men's clothing and accessories",
+      "imageUrl": "https://example.com/categories/men-banner.jpg",
+      "subCategories": [
+        {
+          "subCategoryId": "subcat_men_casual_001",
+          "subCategoryName": "Casual",
+          "subCategorySlug": "casual",
+          "description": "Casual wear for everyday comfort",
+          "createdAt": "2025-12-31T10:00:00.000Z"
+        },
+        {
+          "subCategoryId": "subcat_men_ethnic_001",
+          "subCategoryName": "Ethnic",
+          "subCategorySlug": "ethnic",
+          "description": "Traditional and ethnic wear",
+          "createdAt": "2025-12-31T10:00:00.000Z"
+        }
+      ],
+      "isActive": true,
+      "displayOrder": 1,
+      "createdAt": "2025-12-31T10:00:00.000Z",
+      "updatedAt": "2025-12-31T10:00:00.000Z"
+    }
+  ]
+}
+```
+
+---
+
+### 2. Get Category by ID
+**GET** `/categories/:id`
+
+Get a single category with subcategories (public access).
+
+**Auth Required:** No
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "cat_men_001",
+    "categoryId": "cat_men_001",
+    "categoryName": "Men",
+    "categorySlug": "men",
+    "description": "Men's clothing and accessories",
+    "imageUrl": "https://example.com/categories/men-banner.jpg",
+    "subCategories": [...],
+    "isActive": true,
+    "displayOrder": 1,
+    "createdAt": "2025-12-31T10:00:00.000Z",
+    "updatedAt": "2025-12-31T10:00:00.000Z"
+  }
+}
+```
+
+**Error Response (404):**
+```json
+{
+  "success": false,
+  "message": "Category not found"
+}
+```
+
+---
+
+### 3. Get Category by Slug
+**GET** `/categories/slug/:slug`
+
+Get category by slug (public access).
+
+**Auth Required:** No
+
+**Example:**
+```
+GET /categories/slug/men
+```
+
+**Response:** Same as Get Category by ID
+
+---
+
+### 4. Get SubCategories for Category
+**GET** `/categories/:categoryId/subcategories`
+
+Get all subcategories for a specific category (public access).
 
 **Auth Required:** No
 
@@ -905,45 +1298,74 @@ Get all categories (public access).
   "count": 5,
   "data": [
     {
-      "id": "cat-id-1",
-      "name": "Men's Clothing",
-      "description": "Clothing for men",
-      "createdAt": "2025-01-01T08:00:00.000Z",
-      "updatedAt": "2025-01-01T08:00:00.000Z"
+      "subCategoryId": "subcat_men_casual_001",
+      "subCategoryName": "Casual",
+      "subCategorySlug": "casual",
+      "description": "Casual wear for everyday comfort",
+      "createdAt": "2025-12-31T10:00:00.000Z"
     },
-    ...
+    {
+      "subCategoryId": "subcat_men_ethnic_001",
+      "subCategoryName": "Ethnic",
+      "subCategorySlug": "ethnic",
+      "description": "Traditional and ethnic wear",
+      "createdAt": "2025-12-31T10:00:00.000Z"
+    }
   ]
+}
+```
+
+**Error Response (404):**
+```json
+{
+  "success": false,
+  "message": "Category not found"
 }
 ```
 
 ---
 
-### 2. Get Category by ID
-**GET** `/categories/:id`
-
-Get a single category (public access).
-
-**Auth Required:** No
-
----
-
-### 3. Create Category (Admin)
+### 5. Create Category (Admin)
 **POST** `/categories`
 
-Create a new category.
+Create a new category with optional subcategories.
 
 **Auth Required:** Yes (Admin)
 
 **Request Body:**
 ```json
 {
-  "name": "Women's Clothing",
-  "description": "Clothing for women"
+  "categoryName": "Ethnic Wear",
+  "categorySlug": "ethnic",
+  "description": "Traditional ethnic and cultural clothing",
+  "imageUrl": "https://example.com/categories/ethnic-banner.jpg",
+  "subCategories": [
+    {
+      "subCategoryName": "Folk",
+      "subCategorySlug": "folk",
+      "description": "Traditional folk wear from different regions"
+    },
+    {
+      "subCategoryName": "Punjabi",
+      "subCategorySlug": "punjabi",
+      "description": "Punjabi suits and traditional attire"
+    }
+  ],
+  "isActive": true,
+  "displayOrder": 4
 }
 ```
 
 **Required Fields:**
-- `name`
+- `categoryName` (max 100 chars)
+- `categorySlug` (unique, lowercase letters, numbers, hyphens only)
+
+**Optional Fields:**
+- `description` (max 500 chars)
+- `imageUrl` (valid URL)
+- `subCategories` (array)
+- `isActive` (default: `true`)
+- `displayOrder` (default: `1`)
 
 **Response (201):**
 ```json
@@ -951,37 +1373,253 @@ Create a new category.
   "success": true,
   "message": "Category created successfully",
   "data": {
-    "id": "cat-id-new",
-    "name": "Women's Clothing",
-    "description": "Clothing for women",
+    "id": "cat_ethnic_001",
+    "categoryId": "cat_ethnic_001",
+    "categoryName": "Ethnic Wear",
+    "categorySlug": "ethnic",
     ...
   }
 }
 ```
 
+**Error Response (400) - Duplicate Slug:**
+```json
+{
+  "success": false,
+  "message": "Category slug already exists"
+}
+```
+
 ---
 
-### 4. Update Category (Admin)
+### 6. Update Category (Admin)
 **PUT** `/categories/:id`
 
 Update an existing category.
 
 **Auth Required:** Yes (Admin)
 
+**Request Body:** All fields optional (except `categoryId`, `createdAt`, `subCategories`)
+
+**Note:** Cannot update `categoryId`, `createdAt`. Use separate endpoints to manage subcategories.
+
+**Example:**
+```json
+{
+  "categoryName": "Men's Clothing",
+  "description": "Updated description for men's category",
+  "imageUrl": "https://example.com/new-banner.jpg",
+  "isActive": true,
+  "displayOrder": 1
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Category updated successfully",
+  "data": {
+    "id": "cat_men_001",
+    "categoryName": "Men's Clothing",
+    ...
+  }
+}
+```
+
+**Error Response (400) - Duplicate Slug:**
+```json
+{
+  "success": false,
+  "message": "Category slug already exists"
+}
+```
+
 ---
 
-### 5. Delete Category (Admin)
+### 7. Delete Category (Admin)
 **DELETE** `/categories/:id`
 
-Delete a category (only if no products use it).
+Delete or deactivate a category.
 
 **Auth Required:** Yes (Admin)
+
+**Query Parameters:**
+- `permanent` (default: `false`) - Set to `true` for permanent deletion
+
+**Soft Delete (Default):**
+```
+DELETE /categories/cat_men_001
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Category deactivated successfully"
+}
+```
+
+**Permanent Delete:**
+```
+DELETE /categories/cat_men_001?permanent=true
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Category permanently deleted"
+}
+```
 
 **Error Response (400) - Category in Use:**
 ```json
 {
   "success": false,
-  "message": "Cannot delete category with associated products"
+  "message": "Cannot delete category with associated products. Please delete or reassign products first."
+}
+```
+
+---
+
+## SubCategory Management Endpoints
+
+### 8. Add SubCategory to Category (Admin)
+**POST** `/categories/:categoryId/subcategories`
+
+Add a new subcategory to an existing category.
+
+**Auth Required:** Yes (Admin)
+
+**Request Body:**
+```json
+{
+  "subCategoryName": "Bhangra",
+  "subCategorySlug": "bhangra",
+  "description": "Bhangra performance and festive wear"
+}
+```
+
+**Required Fields:**
+- `subCategoryName` (max 100 chars)
+- `subCategorySlug` (unique within category, lowercase letters, numbers, hyphens)
+
+**Optional Fields:**
+- `description` (max 500 chars)
+
+**Response (201):**
+```json
+{
+  "success": true,
+  "message": "Subcategory added successfully",
+  "data": {
+    "subCategoryId": "subcat_1735659600000",
+    "subCategoryName": "Bhangra",
+    "subCategorySlug": "bhangra",
+    "description": "Bhangra performance and festive wear",
+    "createdAt": "2025-12-31T10:00:00.000Z"
+  }
+}
+```
+
+**Error Response (400) - Duplicate Slug:**
+```json
+{
+  "success": false,
+  "message": "Subcategory slug already exists in this category"
+}
+```
+
+**Error Response (404):**
+```json
+{
+  "success": false,
+  "message": "Category not found"
+}
+```
+
+---
+
+### 9. Update SubCategory (Admin)
+**PUT** `/categories/:categoryId/subcategories/:subCategoryId`
+
+Update an existing subcategory.
+
+**Auth Required:** Yes (Admin)
+
+**Request Body:** All fields optional (except `subCategoryId`, `createdAt`)
+
+**Example:**
+```json
+{
+  "subCategoryName": "Updated Subcategory Name",
+  "description": "Updated description"
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Subcategory updated successfully",
+  "data": {
+    "subCategoryId": "subcat_men_casual_001",
+    "subCategoryName": "Updated Subcategory Name",
+    "subCategorySlug": "casual",
+    "description": "Updated description",
+    "createdAt": "2025-12-31T10:00:00.000Z",
+    "updatedAt": "2025-12-31T15:00:00.000Z"
+  }
+}
+```
+
+**Error Response (400) - Duplicate Slug:**
+```json
+{
+  "success": false,
+  "message": "Subcategory slug already exists in this category"
+}
+```
+
+**Error Response (404):**
+```json
+{
+  "success": false,
+  "message": "Subcategory not found"
+}
+```
+
+---
+
+### 10. Remove SubCategory from Category (Admin)
+**DELETE** `/categories/:categoryId/subcategories/:subCategoryId`
+
+Remove a subcategory from a category.
+
+**Auth Required:** Yes (Admin)
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Subcategory removed successfully"
+}
+```
+
+**Error Response (400) - SubCategory in Use:**
+```json
+{
+  "success": false,
+  "message": "Cannot remove subcategory with associated products. Please delete or reassign products first."
+}
+```
+
+**Error Response (404):**
+```json
+{
+  "success": false,
+  "message": "Category not found"
 }
 ```
 
