@@ -1,8 +1,16 @@
 import express from 'express';
-import { body } from 'express-validator';
 import { validate } from '../middleware/validation.middleware.js';
 import { verifyToken, checkAdmin } from '../middleware/auth.middleware.js';
 import productController from '../controllers/product.controller.js';
+import {
+  createProductSchema,
+  updateProductSchema,
+  updateStockSchema,
+  updateSoldCountSchema,
+  getProductsQuerySchema,
+  getProductsByCategorySchema,
+  productIdParamSchema
+} from '../validations/product.validation.js';
 
 const router = express.Router();
 
@@ -15,13 +23,25 @@ router.get('/featured', productController.getFeaturedProducts);
 router.get('/trending', productController.getTrendingProducts);
 
 // Get products by category (must come before /:id)
-router.get('/category/:category', productController.getProductsByCategory);
+router.get(
+  '/category/:category',
+  validate(getProductsByCategorySchema),
+  productController.getProductsByCategory
+);
 
 // Get all products with filtering and search
-router.get('/', productController.getAllProducts);
+router.get(
+  '/',
+  validate(getProductsQuerySchema),
+  productController.getAllProducts
+);
 
 // Get single product by ID
-router.get('/:id', productController.getProductById);
+router.get(
+  '/:id',
+  validate(productIdParamSchema),
+  productController.getProductById
+);
 
 // Admin Routes (Auth + Admin Role Required)
 
@@ -30,70 +50,7 @@ router.post(
   '/',
   verifyToken,
   checkAdmin,
-  [
-    body('productName')
-      .notEmpty().withMessage('Product name is required')
-      .isLength({ max: 200 }).withMessage('Product name must not exceed 200 characters'),
-    body('productDescription')
-      .notEmpty().withMessage('Product description is required')
-      .isLength({ max: 2000 }).withMessage('Product description must not exceed 2000 characters'),
-    body('category')
-      .notEmpty().withMessage('Category is required')
-      .isIn(['men', 'women', 'kids', 'unisex']).withMessage('Invalid category'),
-    body('subCategory')
-      .notEmpty().withMessage('Sub-category is required'),
-    body('productType')
-      .notEmpty().withMessage('Product type is required'),
-    body('price')
-      .isNumeric().withMessage('Price must be a number')
-      .isFloat({ min: 0 }).withMessage('Price must be positive'),
-    body('currencyType')
-      .optional()
-      .isIn(['INR', 'USD', 'EUR', 'GBP']).withMessage('Invalid currency type'),
-    body('offerType')
-      .optional()
-      .isIn(['percentage', 'amount', 'none']).withMessage('Invalid offer type'),
-    body('offerValue')
-      .optional()
-      .isNumeric().withMessage('Offer value must be a number'),
-    body('tax')
-      .optional()
-      .isNumeric().withMessage('Tax must be a number')
-      .isFloat({ min: 0, max: 100 }).withMessage('Tax must be between 0 and 100'),
-    body('sizes')
-      .isArray({ min: 1 }).withMessage('At least one size is required'),
-    body('colors')
-      .isArray({ min: 1 }).withMessage('At least one color is required'),
-    body('colors.*.colorName')
-      .notEmpty().withMessage('Color name is required'),
-    body('colors.*.colorCode')
-      .notEmpty().withMessage('Color code is required'),
-    body('colors.*.stock')
-      .isNumeric().withMessage('Color stock must be a number')
-      .isInt({ min: 0 }).withMessage('Color stock must be non-negative'),
-    body('images')
-      .isArray({ min: 1 }).withMessage('At least one product image is required'),
-    body('units')
-      .isNumeric().withMessage('Units must be a number')
-      .isInt({ min: 0 }).withMessage('Units must be non-negative'),
-    body('brand')
-      .optional(),
-    body('material')
-      .optional(),
-    body('weight')
-      .optional()
-      .isNumeric().withMessage('Weight must be a number'),
-    body('sku')
-      .optional(),
-    body('vendor')
-      .optional(),
-    body('countryOfOrigin')
-      .optional(),
-    body('isFeatured')
-      .optional()
-      .isBoolean().withMessage('isFeatured must be a boolean'),
-    validate
-  ],
+  validate(createProductSchema),
   productController.createProduct
 );
 
@@ -102,42 +59,8 @@ router.put(
   '/:id',
   verifyToken,
   checkAdmin,
-  [
-    body('productName')
-      .optional()
-      .isLength({ max: 200 }).withMessage('Product name must not exceed 200 characters'),
-    body('productDescription')
-      .optional()
-      .isLength({ max: 2000 }).withMessage('Product description must not exceed 2000 characters'),
-    body('category')
-      .optional()
-      .isIn(['men', 'women', 'kids', 'unisex']).withMessage('Invalid category'),
-    body('price')
-      .optional()
-      .isNumeric().withMessage('Price must be a number')
-      .isFloat({ min: 0 }).withMessage('Price must be positive'),
-    body('offerType')
-      .optional()
-      .isIn(['percentage', 'amount', 'none']).withMessage('Invalid offer type'),
-    body('offerValue')
-      .optional()
-      .isNumeric().withMessage('Offer value must be a number'),
-    body('tax')
-      .optional()
-      .isNumeric().withMessage('Tax must be a number')
-      .isFloat({ min: 0, max: 100 }).withMessage('Tax must be between 0 and 100'),
-    body('units')
-      .optional()
-      .isNumeric().withMessage('Units must be a number')
-      .isInt({ min: 0 }).withMessage('Units must be non-negative'),
-    body('isFeatured')
-      .optional()
-      .isBoolean().withMessage('isFeatured must be a boolean'),
-    body('isActive')
-      .optional()
-      .isBoolean().withMessage('isActive must be a boolean'),
-    validate
-  ],
+  validate(productIdParamSchema),
+  validate(updateProductSchema),
   productController.updateProduct
 );
 
@@ -146,23 +69,8 @@ router.put(
   '/:id/stock',
   verifyToken,
   checkAdmin,
-  [
-    body('units')
-      .optional()
-      .isNumeric().withMessage('Units must be a number')
-      .isInt({ min: 0 }).withMessage('Units must be non-negative'),
-    body('colorStock')
-      .optional()
-      .isArray().withMessage('Color stock must be an array'),
-    body('colorStock.*.colorName')
-      .optional()
-      .notEmpty().withMessage('Color name is required'),
-    body('colorStock.*.stock')
-      .optional()
-      .isNumeric().withMessage('Stock must be a number')
-      .isInt({ min: 0 }).withMessage('Stock must be non-negative'),
-    validate
-  ],
+  validate(productIdParamSchema),
+  validate(updateStockSchema),
   productController.updateStock
 );
 
@@ -171,13 +79,8 @@ router.put(
   '/:id/sold',
   verifyToken,
   checkAdmin,
-  [
-    body('quantity')
-      .notEmpty().withMessage('Quantity is required')
-      .isNumeric().withMessage('Quantity must be a number')
-      .isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
-    validate
-  ],
+  validate(productIdParamSchema),
+  validate(updateSoldCountSchema),
   productController.updateSoldCount
 );
 
@@ -186,6 +89,7 @@ router.delete(
   '/:id',
   verifyToken,
   checkAdmin,
+  validate(productIdParamSchema),
   productController.deleteProduct
 );
 
