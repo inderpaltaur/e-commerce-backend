@@ -1627,12 +1627,43 @@ Remove a subcategory from a category.
 
 ## Order Endpoints
 
+Complete order management system with comprehensive order lifecycle management. See [Order Schema Documentation](ORDER_SCHEMA.md) for detailed field specifications.
+
+### Order Status Flow
+- **Normal**: `pending` → `confirmed` → `processing` → `packed` → `shipped` → `out-for-delivery` → `delivered`
+- **Cancellation**: `pending/confirmed` → `cancelled`
+- **Return**: `delivered` → `returned` → `refunded`
+
+### Payment Status
+- `pending` - Payment not yet completed
+- `completed` - Payment successful
+- `failed` - Payment failed
+- `refunded` - Payment refunded
+- `partially-refunded` - Partial refund completed
+
+---
+
 ### 1. Get User Orders
 **GET** `/orders/my-orders`
 
-Get all orders for the authenticated user.
+Get all orders for the authenticated user with optional filters.
 
 **Auth Required:** Yes
+
+**Query Parameters:**
+- `limit` (default: 50) - Number of orders to return (integer)
+- `orderStatus` - Filter by order status (see enum below)
+- `paymentStatus` - Filter by payment status: `pending`, `completed`, `failed`, `refunded`, `partially-refunded`
+- `fromDate` - Filter orders from date (ISO 8601 format)
+- `toDate` - Filter orders to date (ISO 8601 format)
+
+**Order Status Enum:**
+`pending`, `confirmed`, `processing`, `packed`, `shipped`, `out-for-delivery`, `delivered`, `cancelled`, `returned`, `refunded`, `failed`
+
+**Example:**
+```
+GET /orders/my-orders?limit=20&orderStatus=delivered&fromDate=2025-01-01T00:00:00.000Z&toDate=2025-12-31T23:59:59.000Z
+```
 
 **Response (200):**
 ```json
@@ -1641,29 +1672,84 @@ Get all orders for the authenticated user.
   "count": 3,
   "data": [
     {
-      "id": "order-id-1",
-      "userId": "user-id",
-      "items": [
+      "id": "order_2025_abc123",
+      "orderId": "order_2025_abc123",
+      "orderNumber": "ORD-2025-001234",
+      "userId": "user_xyz789",
+      "userEmail": "john.doe@example.com",
+      "userName": "John Doe",
+      "userPhone": "+919876543210",
+      "orderItems": [
         {
-          "productId": "product-id-1",
-          "name": "Cotton T-Shirt",
-          "price": 29.99,
+          "productId": "prod_kurta_001",
+          "productName": "Cotton Casual Kurta",
+          "productImage": "https://example.com/kurta.jpg",
+          "category": "men",
+          "subCategory": "ethnic",
+          "productType": "kurta",
+          "size": "M",
+          "color": {
+            "colorName": "White",
+            "colorCode": "#FFFFFF"
+          },
           "quantity": 2,
-          "total": 59.98
+          "pricePerUnit": 999,
+          "discount": 199.80,
+          "tax": 143.82,
+          "totalPrice": 1943.82,
+          "sku": "MEN-KURTA-WHT-M-001"
         }
       ],
-      "totalAmount": 59.98,
-      "shippingAddress": {
-        "street": "123 Main St",
-        "city": "New York",
-        ...
+      "subtotal": 3497,
+      "discount": 349.70,
+      "tax": 386.66,
+      "deliveryCharges": 100,
+      "totalAmount": 3633.96,
+      "currencyType": "INR",
+      "offerApplied": {
+        "couponCode": "FIRST10",
+        "discountType": "percentage",
+        "discountValue": 10,
+        "discountAmount": 349.70,
+        "description": "First Order - 10% off"
       },
-      "paymentMethod": "cash_on_delivery",
-      "status": "pending",
+      "shippingAddress": {
+        "fullName": "John Doe",
+        "phoneNumber": "+919876543210",
+        "addressLine1": "123 Marine Drive",
+        "addressLine2": "Apartment 5C",
+        "city": "Mumbai",
+        "state": "Maharashtra",
+        "postalCode": "400020",
+        "country": "India",
+        "landmark": "Near Gateway of India",
+        "addressType": "home"
+      },
+      "billingAddress": {
+        "fullName": "John Doe",
+        "phoneNumber": "+919876543210",
+        "addressLine1": "123 Marine Drive",
+        "city": "Mumbai",
+        "state": "Maharashtra",
+        "postalCode": "400020",
+        "country": "India",
+        "addressType": "home"
+      },
+      "orderStatus": "shipped",
+      "paymentStatus": "completed",
+      "paymentMethod": "upi",
+      "paymentId": "pay_abc123xyz",
+      "trackingNumber": "TRK987654321",
+      "courierService": "BlueDart",
+      "estimatedDelivery": "2026-01-05T00:00:00.000Z",
+      "customerNotes": "Please call before delivery",
+      "internalNotes": "Premium customer - priority delivery",
       "createdAt": "2025-12-31T10:00:00.000Z",
-      "updatedAt": "2025-12-31T10:00:00.000Z"
-    },
-    ...
+      "updatedAt": "2026-01-02T09:00:00.000Z",
+      "confirmedAt": "2025-12-31T10:05:00.000Z",
+      "shippedAt": "2026-01-02T09:00:00.000Z",
+      "refundStatus": "not-requested"
+    }
   ]
 }
 ```
@@ -1673,61 +1759,182 @@ Get all orders for the authenticated user.
 ### 2. Get All Orders (Admin)
 **GET** `/orders`
 
-Get all orders (admin only).
+Get all orders with comprehensive filtering (admin only).
 
 **Auth Required:** Yes (Admin)
 
 **Query Parameters:**
-- `limit` (default: 50)
-- `status` - Filter by status: `pending`, `processing`, `shipped`, `delivered`, `cancelled`
+- `limit` (default: 50) - Number of orders to return
+- `orderStatus` - Filter by order status
+- `paymentStatus` - Filter by payment status
+- `paymentMethod` - Filter by payment method: `cod`, `card`, `upi`, `netbanking`, `wallet`, `emi`
+- `userId` - Filter by specific user ID
+- `fromDate` - Filter orders from date (ISO 8601 format)
+- `toDate` - Filter orders to date (ISO 8601 format)
+
+**Example:**
+```
+GET /orders?limit=100&orderStatus=pending&paymentMethod=cod&fromDate=2025-12-01T00:00:00.000Z
+```
+
+**Response (200):** Same structure as Get User Orders
 
 ---
 
 ### 3. Get Order by ID
-**GET** `/orders/:id`
+**GET** `/orders/:orderId`
 
-Get a single order (user must own it or be admin).
+Get a single order by ID. Users can only view their own orders, admins can view any order.
 
 **Auth Required:** Yes
+
+**URL Parameters:**
+- `orderId` - Order ID
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "order_2025_abc123",
+    "orderId": "order_2025_abc123",
+    "orderNumber": "ORD-2025-001234",
+    ...
+  }
+}
+```
+
+**Error Response (403) - Not Authorized:**
+```json
+{
+  "success": false,
+  "message": "You are not authorized to view this order"
+}
+```
+
+**Error Response (404):**
+```json
+{
+  "success": false,
+  "message": "Order not found"
+}
+```
 
 ---
 
 ### 4. Create Order
 **POST** `/orders`
 
-Create a new order.
+Create a new order with stock validation and automatic stock reduction.
 
 **Auth Required:** Yes
 
 **Request Body:**
 ```json
 {
-  "items": [
+  "orderItems": [
     {
-      "productId": "product-id-1",
-      "quantity": 2
-    },
-    {
-      "productId": "product-id-2",
-      "quantity": 1
+      "productId": "prod_kurta_001",
+      "productName": "Cotton Casual Kurta",
+      "productImage": "https://example.com/kurta.jpg",
+      "category": "men",
+      "subCategory": "ethnic",
+      "productType": "kurta",
+      "size": "M",
+      "color": {
+        "colorName": "White",
+        "colorCode": "#FFFFFF"
+      },
+      "quantity": 2,
+      "pricePerUnit": 999,
+      "discount": 199.80,
+      "tax": 143.82,
+      "totalPrice": 1943.82,
+      "sku": "MEN-KURTA-WHT-M-001"
     }
   ],
   "shippingAddress": {
-    "street": "123 Main St",
-    "city": "New York",
-    "state": "NY",
-    "zipCode": "10001",
-    "country": "USA"
+    "fullName": "John Doe",
+    "phoneNumber": "+919876543210",
+    "addressLine1": "123 Marine Drive",
+    "addressLine2": "Apartment 5C",
+    "city": "Mumbai",
+    "state": "Maharashtra",
+    "postalCode": "400020",
+    "country": "India",
+    "landmark": "Near Gateway of India",
+    "addressType": "home"
   },
-  "paymentMethod": "cash_on_delivery"
+  "billingAddress": {
+    "fullName": "John Doe",
+    "phoneNumber": "+919876543210",
+    "addressLine1": "456 Park Avenue",
+    "city": "Mumbai",
+    "state": "Maharashtra",
+    "postalCode": "400021",
+    "country": "India",
+    "addressType": "work"
+  },
+  "subtotal": 3497,
+  "discount": 349.70,
+  "tax": 386.66,
+  "deliveryCharges": 100,
+  "totalAmount": 3633.96,
+  "currencyType": "INR",
+  "paymentMethod": "upi",
+  "offerApplied": {
+    "couponCode": "FIRST10",
+    "discountType": "percentage",
+    "discountValue": 10,
+    "discountAmount": 349.70,
+    "description": "First Order - 10% off"
+  },
+  "customerNotes": "Please call before delivery"
 }
 ```
 
 **Required Fields:**
-- `items` (array, min 1 item)
-  - `productId`
-  - `quantity` (min 1)
-- `shippingAddress`
+- `orderItems` (array, min 1 item)
+  - `productId` - Product ID
+  - `productName` - Product name (snapshot)
+  - `productImage` - Product image URL
+  - `category` - Category
+  - `subCategory` - Subcategory
+  - `productType` - Product type
+  - `size` - Selected size
+  - `color` - Color object with `colorName` and `colorCode` (hex format `#FFFFFF`)
+  - `quantity` - Quantity (min 1)
+  - `pricePerUnit` - Price per unit at time of order
+  - `discount` - Discount per item (default: 0)
+  - `tax` - Tax per item (default: 0)
+  - `totalPrice` - Total price for this item
+- `shippingAddress` - Complete address object
+  - `fullName`
+  - `phoneNumber` - Valid phone format (`+1234567890`)
+  - `addressLine1`
+  - `city`
+  - `state`
+  - `postalCode`
+  - `country`
+- `subtotal` - Sum of all items before discounts
+- `tax` - Total tax amount
+- `deliveryCharges` - Shipping charges
+- `totalAmount` - Final amount (subtotal - discount + tax + delivery)
+- `paymentMethod` - Payment method: `cod`, `card`, `upi`, `netbanking`, `wallet`, `emi`
+
+**Optional Fields:**
+- `billingAddress` - Billing address (if different from shipping)
+- `discount` - Total discount amount (default: 0)
+- `currencyType` - Currency: `INR`, `USD`, `EUR`, `GBP` (default: `INR`)
+- `offerApplied` - Coupon/offer details
+  - `couponCode`
+  - `discountType`: `percentage`, `amount`, `free-shipping`
+  - `discountValue`
+  - `discountAmount`
+  - `description`
+- `customerNotes` - Customer's special instructions (max 500 chars)
+- `sku` - Product SKU (in orderItems)
+- `addressLine2`, `landmark`, `addressType` (in address objects)
 
 **Response (201):**
 ```json
@@ -1735,11 +1942,13 @@ Create a new order.
   "success": true,
   "message": "Order created successfully",
   "data": {
-    "id": "order-id-new",
-    "userId": "user-id",
-    "items": [...],
-    "totalAmount": 129.97,
-    "status": "pending",
+    "id": "order_2025_new123",
+    "orderId": "order_2025_new123",
+    "orderNumber": "ORD-2025-001235",
+    "userId": "user_xyz789",
+    "orderStatus": "pending",
+    "paymentStatus": "pending",
+    "refundStatus": "not-requested",
     ...
   }
 }
@@ -1749,32 +1958,71 @@ Create a new order.
 ```json
 {
   "success": false,
-  "message": "Insufficient stock for product Cotton T-Shirt"
+  "message": "Insufficient stock for product Cotton Casual Kurta. Available: 50, Requested: 100"
 }
 ```
+
+**Error Response (400) - Product Not Active:**
+```json
+{
+  "success": false,
+  "message": "Product Cotton Casual Kurta is not available for purchase"
+}
+```
+
+**Error Response (400) - Color Not Available:**
+```json
+{
+  "success": false,
+  "message": "Color White is not available for product Cotton Casual Kurta"
+}
+```
+
+**Notes:**
+- Stock is automatically reduced when order is created
+- Order status defaults to `pending`
+- Payment status defaults to `pending` (or `completed` for COD after admin confirmation)
+- Auto-generated `orderNumber` format: `ORD-YYYY-NNNNNN`
+- Refund status defaults to `not-requested`
 
 ---
 
 ### 5. Update Order Status (Admin)
-**PUT** `/orders/:id/status`
+**PUT** `/orders/:orderId/status`
 
-Update order status.
+Update order status with automatic timestamp tracking.
 
 **Auth Required:** Yes (Admin)
+
+**URL Parameters:**
+- `orderId` - Order ID
 
 **Request Body:**
 ```json
 {
-  "status": "processing"
+  "orderStatus": "shipped",
+  "internalNotes": "Order shipped via BlueDart"
 }
 ```
 
-**Valid Status Values:**
-- `pending`
-- `processing`
-- `shipped`
-- `delivered`
-- `cancelled`
+**Required Fields:**
+- `orderStatus` - New order status (enum)
+
+**Optional Fields:**
+- `internalNotes` - Admin notes (max 500 chars)
+
+**Valid Order Status Values:**
+- `pending` - Order placed, awaiting confirmation
+- `confirmed` - Order confirmed (sets `confirmedAt` timestamp)
+- `processing` - Order being prepared
+- `packed` - Order packed
+- `shipped` - Order shipped (sets `shippedAt` timestamp)
+- `out-for-delivery` - Out for delivery
+- `delivered` - Delivered (sets `deliveredAt` timestamp)
+- `cancelled` - Cancelled (sets `cancelledAt` timestamp)
+- `returned` - Returned by customer
+- `refunded` - Payment refunded
+- `failed` - Order processing failed
 
 **Response (200):**
 ```json
@@ -1782,27 +2030,150 @@ Update order status.
   "success": true,
   "message": "Order status updated successfully",
   "data": {
-    "id": "order-id-1",
-    "status": "processing",
-    ...
+    "id": "order_2025_abc123",
+    "orderStatus": "shipped",
+    "shippedAt": "2026-01-02T09:00:00.000Z",
+    "updatedAt": "2026-01-02T09:00:00.000Z"
+  }
+}
+```
+
+**Error Response (404):**
+```json
+{
+  "success": false,
+  "message": "Order not found"
+}
+```
+
+**Notes:**
+- Automatically sets status-specific timestamps:
+  - `confirmed` → `confirmedAt`
+  - `shipped` → `shippedAt`
+  - `delivered` → `deliveredAt`
+  - `cancelled` → `cancelledAt`
+
+---
+
+### 6. Update Payment Status (Admin)
+**PUT** `/orders/:orderId/payment`
+
+Update payment status with optional payment transaction ID.
+
+**Auth Required:** Yes (Admin)
+
+**URL Parameters:**
+- `orderId` - Order ID
+
+**Request Body:**
+```json
+{
+  "paymentStatus": "completed",
+  "paymentId": "pay_abc123xyz",
+  "internalNotes": "Payment verified via UPI"
+}
+```
+
+**Required Fields:**
+- `paymentStatus` - Payment status: `pending`, `completed`, `failed`, `refunded`, `partially-refunded`
+
+**Optional Fields:**
+- `paymentId` - Payment transaction ID
+- `internalNotes` - Admin notes (max 500 chars)
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Payment status updated successfully",
+  "data": {
+    "id": "order_2025_abc123",
+    "paymentStatus": "completed",
+    "paymentId": "pay_abc123xyz",
+    "orderStatus": "confirmed",
+    "confirmedAt": "2025-12-31T10:05:00.000Z"
+  }
+}
+```
+
+**Notes:**
+- If payment status is updated to `completed` and order status is `pending`, the order is automatically confirmed
+
+---
+
+### 7. Add Tracking Information (Admin)
+**PUT** `/orders/:orderId/tracking`
+
+Add shipping tracking information to an order.
+
+**Auth Required:** Yes (Admin)
+
+**URL Parameters:**
+- `orderId` - Order ID
+
+**Request Body:**
+```json
+{
+  "trackingNumber": "TRK987654321",
+  "courierService": "BlueDart",
+  "estimatedDelivery": "2026-01-05T00:00:00.000Z"
+}
+```
+
+**Required Fields:**
+- `trackingNumber` - Courier tracking number
+- `courierService` - Courier service name
+
+**Optional Fields:**
+- `estimatedDelivery` - Estimated delivery date (ISO 8601 format)
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Tracking information added successfully",
+  "data": {
+    "id": "order_2025_abc123",
+    "trackingNumber": "TRK987654321",
+    "courierService": "BlueDart",
+    "estimatedDelivery": "2026-01-05T00:00:00.000Z"
   }
 }
 ```
 
 ---
 
-### 6. Cancel Order
-**PUT** `/orders/:id/cancel`
+### 8. Cancel Order
+**POST** `/orders/:orderId/cancel`
 
-Cancel an order (user must own it, only pending orders can be cancelled).
+Cancel an order. Users can cancel their own orders (before shipping), admins can cancel any order.
 
 **Auth Required:** Yes
+
+**URL Parameters:**
+- `orderId` - Order ID
+
+**Request Body:**
+```json
+{
+  "cancellationReason": "Changed my mind"
+}
+```
+
+**Required Fields:**
+- `cancellationReason` - Reason for cancellation (max 500 chars)
 
 **Response (200):**
 ```json
 {
   "success": true,
-  "message": "Order cancelled successfully"
+  "message": "Order cancelled successfully",
+  "data": {
+    "id": "order_2025_abc123",
+    "orderStatus": "cancelled",
+    "cancellationReason": "Changed my mind",
+    "cancelledAt": "2025-12-31T11:00:00.000Z"
+  }
 }
 ```
 
@@ -1810,9 +2181,146 @@ Cancel an order (user must own it, only pending orders can be cancelled).
 ```json
 {
   "success": false,
-  "message": "Only pending orders can be cancelled"
+  "message": "Cannot cancel order that has already been shipped or delivered"
 }
 ```
+
+**Error Response (403) - Not Authorized:**
+```json
+{
+  "success": false,
+  "message": "You are not authorized to cancel this order"
+}
+```
+
+**Notes:**
+- Stock is automatically restored when order is cancelled
+- Sets `orderStatus` to `cancelled`
+- Sets `cancelledAt` timestamp
+- Users can only cancel orders in `pending`, `confirmed`, or `processing` status
+- Admins can cancel orders in any status except `delivered`
+
+---
+
+### 9. Return Order
+**POST** `/orders/:orderId/return`
+
+Initiate a return for a delivered order.
+
+**Auth Required:** Yes
+
+**URL Parameters:**
+- `orderId` - Order ID
+
+**Request Body:**
+```json
+{
+  "returnReason": "Product size does not fit",
+  "refundAmount": 3633.96
+}
+```
+
+**Required Fields:**
+- `returnReason` - Reason for return (max 500 chars)
+
+**Optional Fields:**
+- `refundAmount` - Amount to refund (defaults to total order amount)
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Return request submitted successfully",
+  "data": {
+    "id": "order_2025_abc123",
+    "orderStatus": "returned",
+    "returnReason": "Product size does not fit",
+    "refundAmount": 3633.96,
+    "refundStatus": "requested",
+    "returnedAt": "2026-01-10T10:00:00.000Z"
+  }
+}
+```
+
+**Error Response (400) - Cannot Return:**
+```json
+{
+  "success": false,
+  "message": "Only delivered orders can be returned"
+}
+```
+
+**Error Response (403) - Not Authorized:**
+```json
+{
+  "success": false,
+  "message": "You are not authorized to return this order"
+}
+```
+
+**Notes:**
+- Only `delivered` orders can be returned
+- Sets `orderStatus` to `returned`
+- Sets `refundStatus` to `requested`
+- Sets `returnedAt` timestamp
+- Stock is automatically restored
+
+---
+
+### 10. Process Refund (Admin)
+**PUT** `/orders/:orderId/refund`
+
+Process a refund for a returned or cancelled order.
+
+**Auth Required:** Yes (Admin)
+
+**URL Parameters:**
+- `orderId` - Order ID
+
+**Request Body:**
+```json
+{
+  "refundAmount": 3633.96,
+  "refundStatus": "completed",
+  "internalNotes": "Refund processed via original payment method"
+}
+```
+
+**Required Fields:**
+- `refundAmount` - Amount to refund (positive number)
+- `refundStatus` - Refund status: `pending`, `completed`, `rejected`
+
+**Optional Fields:**
+- `internalNotes` - Admin notes (max 500 chars)
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "message": "Refund processed successfully",
+  "data": {
+    "id": "order_2025_abc123",
+    "refundAmount": 3633.96,
+    "refundStatus": "completed",
+    "paymentStatus": "refunded",
+    "refundedAt": "2026-01-12T10:00:00.000Z"
+  }
+}
+```
+
+**Error Response (404):**
+```json
+{
+  "success": false,
+  "message": "Order not found"
+}
+```
+
+**Notes:**
+- If `refundStatus` is set to `completed`:
+  - Sets `paymentStatus` to `refunded`
+  - Sets `refundedAt` timestamp
+- Partial refunds can be processed by specifying a lower `refundAmount`
 
 ---
 
