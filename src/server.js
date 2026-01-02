@@ -1,10 +1,10 @@
+// Load environment variables FIRST (before any other imports)
+import './config/env.js';
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 const app = express();
 
