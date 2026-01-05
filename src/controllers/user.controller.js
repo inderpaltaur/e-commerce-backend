@@ -80,6 +80,42 @@ export const userController = {
   getAllUsers: async (req, res) => {
     try {
       const { limit = 50, accountStatus, role } = req.query;
+
+      // Handle multiple roles (e.g., role=admin,super_admin)
+      if (role && role.includes(',')) {
+        const roles = role.split(',').map(r => r.trim());
+        const usersSet = new Set();
+
+        // Fetch users for each role
+        for (const singleRole of roles) {
+          let query = db.collection('users').where('role', '==', singleRole);
+
+          if (accountStatus) {
+            query = query.where('accountStatus', '==', accountStatus);
+          }
+
+          query = query.limit(parseInt(limit));
+          const snapshot = await query.get();
+
+          snapshot.forEach(doc => {
+            usersSet.add(JSON.stringify({
+              id: doc.id,
+              ...doc.data()
+            }));
+          });
+        }
+
+        // Convert Set back to array of objects
+        const users = Array.from(usersSet).map(user => JSON.parse(user));
+
+        return res.status(200).json({
+          success: true,
+          count: users.length,
+          data: users
+        });
+      }
+
+      // Single role or no role filter
       let query = db.collection('users');
 
       if (accountStatus) {
@@ -338,6 +374,59 @@ export const userController = {
       res.status(500).json({
         success: false,
         message: 'Error verifying email',
+        error: error.message
+      });
+    }
+  },
+
+  // Delete user (super admin only)
+  deleteUser: async (req, res) => {
+    try {
+      const { uid } = req.params;
+      const requesterId = req.user.uid;
+
+      // Prevent self-deletion
+      if (uid === requesterId) {
+        return res.status(400).json({
+          success: false,
+          message: 'You cannot delete your own account'
+        });
+      }
+
+      // Check if user exists
+      const userDoc = await db.collection('users').doc(uid).get();
+      if (!userDoc.exists) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      const userData = userDoc.data();
+
+      // Prevent deleting super_admin if requester is not super_admin
+      if (userData.role === 'super_admin' && req.user.role !== 'super_admin') {
+        return res.status(403).json({
+          success: false,
+          message: 'Only super admins can delete other super admins'
+        });
+      }
+
+      // Delete from Firebase Auth
+      await auth.deleteUser(uid);
+
+      // Delete from Firestore
+      await db.collection('users').doc(uid).delete();
+
+      res.status(200).json({
+        success: true,
+        message: 'User deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error deleting user',
         error: error.message
       });
     }

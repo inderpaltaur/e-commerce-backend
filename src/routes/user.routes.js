@@ -1,6 +1,6 @@
 import express from 'express';
 import { validate } from '../middleware/validation.middleware.js';
-import { verifyToken, checkAdmin } from '../middleware/auth.middleware.js';
+import { verifyToken, checkAdmin, checkSuperAdmin } from '../middleware/auth.middleware.js';
 import userController from '../controllers/user.controller.js';
 import {
   updateProfileSchema,
@@ -95,6 +95,15 @@ router.put(
   checkAdmin,
   validate(updateAccountStatusSchema),
   userController.updateAccountStatus
+);
+
+// Delete user (super admin only)
+router.delete(
+  '/:uid',
+  verifyToken,
+  checkSuperAdmin,
+  validate(userIdParamSchema),
+  userController.deleteUser
 );
 
 export default router;
