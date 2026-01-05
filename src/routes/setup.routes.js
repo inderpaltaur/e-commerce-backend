@@ -1,7 +1,8 @@
 import express from 'express';
 import {
   initializeSuperAdmin,
-  checkSuperAdminExists
+  checkSuperAdminExists,
+  checkUserByEmail
 } from '../controllers/setup.controller.js';
 import { validate } from '../middleware/validation.middleware.js';
 import { initializeSuperAdminSchema } from '../validations/setup.validation.js';
@@ -17,5 +18,8 @@ router.post(
   validate(initializeSuperAdminSchema),
   initializeSuperAdmin
 );
+
+// Diagnostic endpoint to check user data (public for debugging)
+router.get('/check-user', checkUserByEmail);
 
 export default router;

@@ -59,10 +59,12 @@ export const socialAuthSchema = z.object({
 
     photoURL: z.string()
       .url('Photo URL must be a valid URL')
+      .nullable()
       .optional(),
 
     phoneNumber: z.string()
       .regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number format')
+      .nullable()
       .optional()
   })
 });

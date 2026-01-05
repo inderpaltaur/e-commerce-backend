@@ -98,3 +98,70 @@ export const checkSuperAdminExists = async (req, res) => {
     });
   }
 };
+
+// Diagnostic endpoint to check user data by email (for debugging)
+export const checkUserByEmail = async (req, res) => {
+  try {
+    const { email } = req.query;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email parameter is required'
+      });
+    }
+
+    // Get user from Firebase Auth
+    let authUser;
+    try {
+      authUser = await auth.getUserByEmail(email);
+    } catch (error) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found in Firebase Auth',
+        error: error.message
+      });
+    }
+
+    // Get user from Firestore
+    const userDoc = await db.collection('users').doc(authUser.uid).get();
+
+    if (!userDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found in Firestore database',
+        authData: {
+          uid: authUser.uid,
+          email: authUser.email,
+          displayName: authUser.displayName
+        }
+      });
+    }
+
+    const userData = userDoc.data();
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        uid: authUser.uid,
+        email: authUser.email,
+        firestoreData: {
+          role: userData.role,
+          accountStatus: userData.accountStatus,
+          name: userData.name,
+          authProvider: userData.authProvider,
+          createdAt: userData.createdAt,
+          lastLogin: userData.lastLogin
+        },
+        customClaims: authUser.customClaims || {}
+      }
+    });
+  } catch (error) {
+    console.error('Error checking user:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error checking user',
+      error: error.message
+    });
+  }
+};

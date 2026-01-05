@@ -1,6 +1,8 @@
 import express from 'express';
 import {
   createAdminRequest,
+  createPublicAdminRequest,
+  checkAdminRequestByUserId,
   getAdminRequests,
   getMyAdminRequest,
   approveAdminRequest,
@@ -16,7 +18,21 @@ import {
 
 const router = express.Router();
 
-// Create admin request (authenticated users only)
+// Public endpoint - Create admin request (for new users)
+router.post(
+  '/public',
+  verifyToken, // Still verify token but don't check role
+  createPublicAdminRequest
+);
+
+// Public endpoint - Check request status by user ID
+router.get(
+  '/check/:userId',
+  verifyToken, // Still verify token but don't check role
+  checkAdminRequestByUserId
+);
+
+// Create admin request (authenticated users only - legacy)
 router.post(
   '/',
   verifyToken,

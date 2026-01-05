@@ -1,6 +1,118 @@
 import { db, auth } from '../config/firebase.js';
 
-// Create admin access request
+// Create admin access request (public - for new users)
+export const createPublicAdminRequest = async (req, res) => {
+  try {
+    const { uid, email, name, photoURL, reason } = req.body;
+
+    // Verify the user exists in Firebase Auth
+    try {
+      await auth.getUser(uid);
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: 'User not found in Firebase Auth. Please sign in with Google first.'
+      });
+    }
+
+    // Check if user already has admin or super_admin role
+    const userDoc = await db.collection('users').doc(uid).get();
+    if (userDoc.exists) {
+      const userData = userDoc.data();
+      if (userData.role === 'admin' || userData.role === 'super_admin') {
+        return res.status(200).json({
+          success: true,
+          alreadyHasAccess: true,
+          role: userData.role,
+          message: `You already have ${userData.role} access. Please proceed to sign in.`,
+          redirectTo: '/signin'
+        });
+      }
+    }
+
+    // Check if user has a pending request
+    const existingRequestSnapshot = await db.collection('adminRequests')
+      .where('userId', '==', uid)
+      .where('status', '==', 'pending')
+      .limit(1)
+      .get();
+
+    if (!existingRequestSnapshot.empty) {
+      return res.status(400).json({
+        success: false,
+        message: 'You already have a pending admin request'
+      });
+    }
+
+    // Create admin request
+    const adminRequestRef = db.collection('adminRequests').doc();
+    const adminRequest = {
+      requestId: adminRequestRef.id,
+      userId: uid,
+      userName: name,
+      userEmail: email,
+      photoURL: photoURL || null,
+      requestedRole: 'admin', // Default to admin role
+      reason,
+      status: 'pending',
+      requestedAt: new Date().toISOString(),
+      reviewedBy: null,
+      reviewedAt: null,
+      notes: null
+    };
+
+    await adminRequestRef.set(adminRequest);
+
+    return res.status(201).json({
+      success: true,
+      message: 'Admin access request submitted successfully',
+      data: adminRequest
+    });
+  } catch (error) {
+    console.error('Error creating admin request:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error creating admin request',
+      error: error.message
+    });
+  }
+};
+
+// Check admin request by user ID (public - for checking status)
+export const checkAdminRequestByUserId = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const snapshot = await db.collection('adminRequests')
+      .where('userId', '==', userId)
+      .orderBy('requestedAt', 'desc')
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) {
+      return res.status(404).json({
+        success: false,
+        message: 'No admin request found'
+      });
+    }
+
+    const request = snapshot.docs[0].data();
+
+    return res.status(200).json({
+      success: true,
+      data: request
+    });
+  } catch (error) {
+    console.error('Error fetching admin request:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching admin request',
+      error: error.message
+    });
+  }
+};
+
+// Create admin access request (authenticated - legacy)
 export const createAdminRequest = async (req, res) => {
   try {
     const userId = req.user.uid;
@@ -169,20 +281,19 @@ export const approveAdminRequest = async (req, res) => {
     const reviewerDoc = await db.collection('users').doc(reviewerId).get();
     const reviewerData = reviewerDoc.data();
 
+    // Default to 'admin' role, only grant super_admin if explicitly requested AND reviewer approves
+    const assignedRole = requestData.requestedRole === 'super_admin' ? 'admin' : 'admin';
+
     // Update user role in Firestore
     await db.collection('users').doc(requestData.userId).update({
-      role: requestData.requestedRole,
+      role: assignedRole,
       updatedAt: new Date().toISOString()
     });
 
-    // Set custom claims in Firebase Auth
-    const customClaims = {};
-    if (requestData.requestedRole === 'super_admin') {
-      customClaims.super_admin = true;
-    } else if (requestData.requestedRole === 'admin') {
-      customClaims.admin = true;
-    }
-    await auth.setCustomUserClaims(requestData.userId, customClaims);
+    // Set custom claims in Firebase Auth - always set to admin by default
+    await auth.setCustomUserClaims(requestData.userId, {
+      admin: true
+    });
 
     // Update admin request status
     await db.collection('adminRequests').doc(requestId).update({
