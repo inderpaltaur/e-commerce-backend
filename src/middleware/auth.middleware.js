@@ -34,18 +34,53 @@ export const checkAdmin = async (req, res, next) => {
 
     const userRecord = await auth.getUser(req.user.uid);
 
-    if (!userRecord.customClaims?.admin) {
+    // Allow both admin and super_admin roles
+    if (!userRecord.customClaims?.admin && !userRecord.customClaims?.super_admin) {
       return res.status(403).json({
         success: false,
         message: 'Admin access required'
       });
     }
 
+    // Attach role info to request for use in controllers
+    req.userRole = userRecord.customClaims?.super_admin ? 'super_admin' : 'admin';
+
     next();
   } catch (error) {
     return res.status(500).json({
       success: false,
       message: 'Error verifying admin status',
+      error: error.message
+    });
+  }
+};
+
+export const checkSuperAdmin = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
+    const userRecord = await auth.getUser(req.user.uid);
+
+    // Only allow super_admin role
+    if (!userRecord.customClaims?.super_admin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Super admin access required'
+      });
+    }
+
+    req.userRole = 'super_admin';
+
+    next();
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Error verifying super admin status',
       error: error.message
     });
   }

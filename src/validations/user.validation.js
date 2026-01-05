@@ -55,7 +55,7 @@ export const getAllUsersQuerySchema = z.object({
 
     accountStatus: z.enum(['active', 'blocked', 'suspended']).optional(),
 
-    role: z.enum(['customer', 'admin']).optional()
+    role: z.enum(['customer', 'admin', 'super_admin']).optional()
   })
 });
 
@@ -84,8 +84,8 @@ export const updateRoleSchema = z.object({
     uid: z.string().min(1, 'User ID is required')
   }),
   body: z.object({
-    role: z.enum(['customer', 'admin'], {
-      errorMap: () => ({ message: 'Role must be either customer or admin' })
+    role: z.enum(['customer', 'admin', 'super_admin'], {
+      errorMap: () => ({ message: 'Role must be one of: customer, admin, super_admin' })
     })
   })
 });
