@@ -1,4 +1,4 @@
-import { db } from '../config/firebase.js';
+import { db, storage as firebaseStorage } from '../config/firebase.js';
 import {
   buildCategoryPath,
   buildPathIds,
@@ -13,6 +13,7 @@ import {
 import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { readFileSync, unlinkSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1098,19 +1099,40 @@ export const categoryController = {
           });
         }
 
-        // In a real application, you might want to upload to cloud storage
-        // For now, we'll return the local file path
-        const imageUrl = `/uploads/categories/${req.file.filename}`;
+        // Upload to Firebase Storage
+        const bucket = firebaseStorage.bucket();
+        const fileName = `categories/${Date.now()}-${req.file.originalname}`;
+        const file = bucket.file(fileName);
+
+        // Read the uploaded file
+        const fileContent = readFileSync(req.file.path);
+
+        // Upload to Firebase Storage
+        await file.save(fileContent, {
+          metadata: {
+            contentType: req.file.mimetype,
+          },
+        });
+
+        // Get a signed URL with long expiry (10 years)
+        const [url] = await file.getSignedUrl({
+          action: 'read',
+          expires: Date.now() + 10 * 365 * 24 * 60 * 60 * 1000, // 10 years
+        });
+
+        // Clean up the local file
+        unlinkSync(req.file.path);
 
         res.status(200).json({
           success: true,
-          message: 'Image uploaded successfully',
-          imageUrl
+          message: 'Image uploaded successfully to Firebase Storage',
+          imageUrl: url
         });
       } catch (error) {
+        console.error('Firebase Storage upload error:', error);
         res.status(500).json({
           success: false,
-          message: 'Error uploading image',
+          message: 'Error uploading image to Firebase Storage. Please ensure Cloud Storage is enabled in your Firebase Console.',
           error: error.message
         });
       }

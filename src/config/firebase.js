@@ -35,7 +35,8 @@ if (serviceAccount) {
   // Use service account file
   firebaseConfig = {
     credential: admin.credential.cert(serviceAccount),
-    databaseURL: process.env.FIREBASE_DATABASE_URL
+    databaseURL: process.env.FIREBASE_DATABASE_URL,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || `${serviceAccount.project_id}.appspot.com`
   };
 } else {
   // Use environment variables as fallback
@@ -52,7 +53,8 @@ if (serviceAccount) {
       clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
       privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
     }),
-    databaseURL: process.env.FIREBASE_DATABASE_URL
+    databaseURL: process.env.FIREBASE_DATABASE_URL,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || `${process.env.FIREBASE_PROJECT_ID}.appspot.com`
   };
   console.log('✓ Firebase initialized with environment variables');
   console.log('✓ Project ID:', process.env.FIREBASE_PROJECT_ID);

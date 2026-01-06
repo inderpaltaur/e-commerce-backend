@@ -93,7 +93,7 @@ export const updateCategorySchema = z.object({
       .refine(val => {
         // Allow empty string for optional field
         if (!val) return true;
-        // Allow URLs
+        // Allow URLs (including Firebase Storage URLs)
         try {
           new URL(val);
           return true;
