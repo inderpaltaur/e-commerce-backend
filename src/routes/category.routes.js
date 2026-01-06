@@ -11,7 +11,11 @@ import {
   categorySlugParamSchema,
   subCategoryParamsSchema,
   getCategoriesQuerySchema,
-  getSubCategoriesSchema
+  getSubCategoriesSchema,
+  getCategoryTreeSchema,
+  moveCategorySchema,
+  reorderCategoriesSchema,
+  getCategoriesByLevelSchema
 } from '../validations/category.validation.js';
 
 const router = express.Router();
@@ -23,6 +27,20 @@ router.get(
   '/',
   validate(getCategoriesQuerySchema),
   categoryController.getAllCategories
+);
+
+// NEW: Get category tree (hierarchical structure)
+router.get(
+  '/tree',
+  validate(getCategoryTreeSchema),
+  categoryController.getCategoryTree
+);
+
+// NEW: Get categories by level
+router.get(
+  '/level/:level',
+  validate(getCategoriesByLevelSchema),
+  categoryController.getCategoriesByLevel
 );
 
 // Get category by slug (must come before /:id to avoid route conflict)
@@ -39,7 +57,28 @@ router.get(
   categoryController.getCategoryById
 );
 
-// Get subcategories for a category
+// NEW: Get category children (direct children only)
+router.get(
+  '/:id/children',
+  validate(categoryIdParamSchema),
+  categoryController.getCategoryChildren
+);
+
+// NEW: Get category descendants (all nested children)
+router.get(
+  '/:id/descendants',
+  validate(categoryIdParamSchema),
+  categoryController.getCategoryDescendants
+);
+
+// NEW: Get category ancestors (breadcrumb)
+router.get(
+  '/:id/ancestors',
+  validate(categoryIdParamSchema),
+  categoryController.getCategoryAncestors
+);
+
+// Get subcategories for a category (DEPRECATED - use /tree or /:id/children instead)
 router.get(
   '/:categoryId/subcategories',
   validate(getSubCategoriesSchema),
@@ -76,7 +115,25 @@ router.delete(
   categoryController.deleteCategory
 );
 
-// Subcategory Management Routes
+// NEW: Move category to new parent (Admin Only)
+router.put(
+  '/:id/move',
+  verifyToken,
+  checkAdmin,
+  validate(moveCategorySchema),
+  categoryController.moveCategory
+);
+
+// NEW: Bulk reorder categories (Admin Only)
+router.put(
+  '/reorder',
+  verifyToken,
+  checkAdmin,
+  validate(reorderCategoriesSchema),
+  categoryController.reorderCategories
+);
+
+// Subcategory Management Routes (DEPRECATED - use create with parentId instead)
 
 // Add subcategory to a category
 router.post(

@@ -267,14 +267,15 @@ export const productController = {
     }
   },
 
-  // Create product
+  // Create product (enhanced for dynamic categories)
   createProduct: async (req, res) => {
     try {
       const {
         productName,
         productDescription,
-        category,
-        subCategory,
+        categoryId, // NEW: Dynamic category reference
+        category, // OLD: Legacy category
+        subCategory, // OLD: Legacy subcategory
         productType,
         price,
         currencyType = 'INR',
@@ -298,11 +299,40 @@ export const productController = {
       } = req.body;
 
       // Validate required fields
-      if (!productName || !productDescription || !category || !subCategory ||
-          !productType || !price || !sizes || !colors || !images || units === undefined) {
+      if (!productName || !productDescription || !productType || !price ||
+          !sizes || !colors || !images || units === undefined) {
         return res.status(400).json({
           success: false,
           message: 'Missing required fields'
+        });
+      }
+
+      // Handle category - either new (categoryId) or old (category/subCategory)
+      let categoryPath = null;
+      let categoryPathIds = null;
+      let finalCategoryId = categoryId;
+      let finalCategory = category;
+      let finalSubCategory = subCategory;
+
+      // If categoryId is provided (new format), fetch category data
+      if (categoryId) {
+        const categoryDoc = await db.collection('categories').doc(categoryId).get();
+
+        if (!categoryDoc.exists) {
+          return res.status(404).json({
+            success: false,
+            message: 'Category not found'
+          });
+        }
+
+        const categoryData = categoryDoc.data();
+        categoryPath = categoryData.path || `/${categoryData.categorySlug}`;
+        categoryPathIds = categoryData.pathIds || [categoryId];
+      } else if (!category) {
+        // Neither categoryId nor legacy category provided
+        return res.status(400).json({
+          success: false,
+          message: 'Either categoryId (new format) or category (legacy format) is required'
         });
       }
 
@@ -312,8 +342,16 @@ export const productController = {
       const productData = {
         productName,
         productDescription,
-        category,
-        subCategory,
+
+        // NEW: Dynamic category fields
+        ...(finalCategoryId && { categoryId: finalCategoryId }),
+        ...(categoryPath && { categoryPath }),
+        ...(categoryPathIds && { categoryPathIds }),
+
+        // OLD: Legacy category fields (for backward compatibility)
+        ...(finalCategory && { category: finalCategory }),
+        ...(finalSubCategory && { subCategory: finalSubCategory }),
+
         productType,
         price: parseFloat(price),
         currencyType,
@@ -331,7 +369,7 @@ export const productController = {
         careInstructions: careInstructions || '',
         weight: weight ? parseFloat(weight) : 0,
         dimensions: dimensions || null,
-        sku: sku || `${category}-${productType}-${Date.now()}`,
+        sku: sku || `${finalCategory || 'product'}-${productType}-${Date.now()}`,
         vendor: vendor || '',
         countryOfOrigin,
         isFeatured,
@@ -370,7 +408,7 @@ export const productController = {
     }
   },
 
-  // Update product
+  // Update product (enhanced for dynamic categories)
   updateProduct: async (req, res) => {
     try {
       const { id } = req.params;
@@ -381,6 +419,22 @@ export const productController = {
       delete updateData.soldCount;
       delete updateData.createdAt;
       delete updateData.rating;
+
+      // Handle category update - if categoryId is being changed
+      if (updateData.categoryId) {
+        const categoryDoc = await db.collection('categories').doc(updateData.categoryId).get();
+
+        if (!categoryDoc.exists) {
+          return res.status(404).json({
+            success: false,
+            message: 'Category not found'
+          });
+        }
+
+        const categoryData = categoryDoc.data();
+        updateData.categoryPath = categoryData.path || `/${categoryData.categorySlug}`;
+        updateData.categoryPathIds = categoryData.pathIds || [updateData.categoryId];
+      }
 
       // Set updated timestamp
       updateData.updatedAt = new Date().toISOString();

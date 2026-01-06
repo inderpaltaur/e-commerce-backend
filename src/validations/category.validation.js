@@ -19,7 +19,7 @@ const subCategorySchema = z.object({
     .optional()
 });
 
-// Create category schema
+// Create category schema (enhanced for unlimited nesting)
 export const createCategorySchema = z.object({
   body: z.object({
     categoryName: z.string()
@@ -37,6 +37,12 @@ export const createCategorySchema = z.object({
 
     imageUrl: z.string()
       .url('Image URL must be a valid URL')
+      .optional(),
+
+    // NEW: Parent category ID for hierarchy support
+    parentId: z.string()
+      .min(1)
+      .nullable()
       .optional(),
 
     subCategories: z.array(subCategorySchema)
@@ -163,5 +169,57 @@ export const getCategoriesQuerySchema = z.object({
 export const getSubCategoriesSchema = z.object({
   params: z.object({
     categoryId: z.string().min(1, 'Category ID is required')
+  })
+});
+
+// NEW: Get category tree query schema
+export const getCategoryTreeSchema = z.object({
+  query: z.object({
+    maxDepth: z.string()
+      .transform(val => parseInt(val))
+      .optional(),
+    parentId: z.string()
+      .optional(),
+    includeInactive: z.enum(['true', 'false'])
+      .transform(val => val === 'true')
+      .optional()
+  })
+});
+
+// NEW: Move category schema
+export const moveCategorySchema = z.object({
+  params: z.object({
+    id: z.string().min(1, 'Category ID is required')
+  }),
+  body: z.object({
+    newParentId: z.string()
+      .nullable(),
+    newDisplayOrder: z.number()
+      .int()
+      .positive()
+      .optional()
+  })
+});
+
+// NEW: Reorder categories schema
+export const reorderCategoriesSchema = z.object({
+  body: z.object({
+    updates: z.array(
+      z.object({
+        id: z.string().min(1, 'Category ID is required'),
+        displayOrder: z.number()
+          .int()
+          .positive('Display order must be a positive integer')
+      })
+    ).min(1, 'At least one category update is required')
+  })
+});
+
+// NEW: Get categories by level schema
+export const getCategoriesByLevelSchema = z.object({
+  params: z.object({
+    level: z.string()
+      .transform(val => parseInt(val))
+      .refine(val => !isNaN(val) && val >= 0, 'Level must be a non-negative integer')
   })
 });

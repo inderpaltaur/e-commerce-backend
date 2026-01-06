@@ -1,4 +1,15 @@
 import { db } from '../config/firebase.js';
+import {
+  buildCategoryPath,
+  buildPathIds,
+  validateDepthLimit,
+  getChildrenCount,
+  updateDescendantPaths,
+  getAllDescendants,
+  buildCategoryTree,
+  getCategoryWithAncestors,
+  validateNoCircularReference
+} from '../utils/categoryUtils.js';
 
 export const categoryController = {
   // Get all categories with subcategories
@@ -101,7 +112,7 @@ export const categoryController = {
     }
   },
 
-  // Create category
+  // Create category (enhanced for unlimited nesting)
   createCategory: async (req, res) => {
     try {
       const {
@@ -109,6 +120,7 @@ export const categoryController = {
         categorySlug,
         description = '',
         imageUrl = '',
+        parentId = null,
         subCategories = [],
         isActive = true,
         displayOrder = 1
@@ -122,37 +134,100 @@ export const categoryController = {
         });
       }
 
-      // Check if slug already exists
-      const existingCategory = await db.collection('categories')
-        .where('categorySlug', '==', categorySlug)
-        .limit(1)
-        .get();
+      let parentPath = null;
+      let parentPathIds = [];
+      let level = 0;
+
+      // If parent is specified, validate and get parent data
+      if (parentId) {
+        const parentDoc = await db.collection('categories').doc(parentId).get();
+
+        if (!parentDoc.exists) {
+          return res.status(404).json({
+            success: false,
+            message: 'Parent category not found'
+          });
+        }
+
+        const parentData = parentDoc.data();
+        parentPath = parentData.path || `/${parentData.categorySlug}`;
+        parentPathIds = parentData.pathIds || [parentId];
+        level = (parentData.level || 0) + 1;
+
+        // Validate depth limit
+        try {
+          validateDepthLimit(level);
+        } catch (depthError) {
+          return res.status(400).json({
+            success: false,
+            message: depthError.message
+          });
+        }
+      }
+
+      // Check if slug already exists among siblings (same parent)
+      let slugQuery = db.collection('categories')
+        .where('categorySlug', '==', categorySlug);
+
+      if (parentId) {
+        slugQuery = slugQuery.where('parentId', '==', parentId);
+      } else {
+        slugQuery = slugQuery.where('parentId', '==', null);
+      }
+
+      const existingCategory = await slugQuery.limit(1).get();
 
       if (!existingCategory.empty) {
         return res.status(400).json({
           success: false,
-          message: 'Category slug already exists'
+          message: 'Category slug already exists in this parent category'
         });
       }
 
-      const categoryData = {
+      // Create the category document first to get the ID
+      const tempCategoryData = {
         categoryName,
         categorySlug,
         description,
         imageUrl,
+        parentId: parentId || null,
         subCategories,
         isActive,
         displayOrder: parseInt(displayOrder),
+        level,
         createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        childrenCount: 0,
+        descendantsCount: 0,
+        metadata: {
+          hasProducts: false,
+          productCount: 0,
+          isLeaf: true
+        }
       };
 
-      const docRef = await db.collection('categories').add(categoryData);
+      const docRef = await db.collection('categories').add(tempCategoryData);
 
-      // Add categoryId to the document
+      // Build path and pathIds using the generated ID
+      const path = buildCategoryPath(categorySlug, parentPath);
+      const pathIds = buildPathIds(docRef.id, parentPathIds);
+
+      // Update the document with path, pathIds, and categoryId
       await db.collection('categories').doc(docRef.id).update({
-        categoryId: docRef.id
+        categoryId: docRef.id,
+        path,
+        pathIds
       });
+
+      // If this category has a parent, update parent's childrenCount
+      if (parentId) {
+        const newChildrenCount = await getChildrenCount(parentId);
+        await db.collection('categories').doc(parentId).update({
+          childrenCount: newChildrenCount,
+          'metadata.isLeaf': false,
+          updatedAt: new Date().toISOString()
+        });
+      }
 
       res.status(201).json({
         success: true,
@@ -160,7 +235,9 @@ export const categoryController = {
         data: {
           id: docRef.id,
           categoryId: docRef.id,
-          ...categoryData
+          ...tempCategoryData,
+          path,
+          pathIds
         }
       });
     } catch (error) {
@@ -172,33 +249,68 @@ export const categoryController = {
     }
   },
 
-  // Update category
+  // Update category (enhanced to handle path recalculation)
   updateCategory: async (req, res) => {
     try {
       const { id } = req.params;
       const updateData = { ...req.body };
 
+      // Get current category data
+      const currentDoc = await db.collection('categories').doc(id).get();
+
+      if (!currentDoc.exists) {
+        return res.status(404).json({
+          success: false,
+          message: 'Category not found'
+        });
+      }
+
+      const currentData = currentDoc.data();
+
       // Remove fields that shouldn't be updated directly
       delete updateData.categoryId;
       delete updateData.createdAt;
       delete updateData.subCategories; // Use separate endpoint for subcategories
+      delete updateData.parentId; // Use moveCategory endpoint to change parent
+      delete updateData.pathIds; // Calculated automatically
+      delete updateData.path; // Calculated automatically
+      delete updateData.level; // Calculated automatically
 
       // Set updated timestamp
       updateData.updatedAt = new Date().toISOString();
 
-      // If slug is being updated, check if it already exists
-      if (updateData.categorySlug) {
-        const existingCategory = await db.collection('categories')
-          .where('categorySlug', '==', updateData.categorySlug)
-          .limit(1)
-          .get();
+      // If slug is being updated, check if it already exists among siblings
+      if (updateData.categorySlug && updateData.categorySlug !== currentData.categorySlug) {
+        let slugQuery = db.collection('categories')
+          .where('categorySlug', '==', updateData.categorySlug);
+
+        if (currentData.parentId) {
+          slugQuery = slugQuery.where('parentId', '==', currentData.parentId);
+        } else {
+          slugQuery = slugQuery.where('parentId', '==', null);
+        }
+
+        const existingCategory = await slugQuery.limit(1).get();
 
         if (!existingCategory.empty && existingCategory.docs[0].id !== id) {
           return res.status(400).json({
             success: false,
-            message: 'Category slug already exists'
+            message: 'Category slug already exists in this parent category'
           });
         }
+
+        // Recalculate path and update descendants
+        const parentPath = currentData.parentId
+          ? (await db.collection('categories').doc(currentData.parentId).get()).data()?.path || ''
+          : '';
+
+        const newPath = buildCategoryPath(updateData.categorySlug, parentPath);
+        const newPathIds = currentData.pathIds || [id];
+
+        updateData.path = newPath;
+
+        // Update all descendants' paths
+        await updateDescendantPaths(id, newPath, newPathIds);
       }
 
       // Parse displayOrder if provided
@@ -227,20 +339,73 @@ export const categoryController = {
     }
   },
 
-  // Delete category
+  // Delete category (enhanced to check for children and descendants)
   deleteCategory: async (req, res) => {
     try {
       const { id } = req.params;
-      const { permanent = false } = req.query;
+      const { permanent = false, cascade = false } = req.query;
 
-      // Check if any products use this category
-      const productsSnapshot = await db
-        .collection('products')
-        .where('categoryId', '==', id)
+      // Get the category data
+      const categoryDoc = await db.collection('categories').doc(id).get();
+
+      if (!categoryDoc.exists) {
+        return res.status(404).json({
+          success: false,
+          message: 'Category not found'
+        });
+      }
+
+      const categoryData = categoryDoc.data();
+
+      // Check if category has children
+      const childrenSnapshot = await db
+        .collection('categories')
+        .where('parentId', '==', id)
         .limit(1)
         .get();
 
-      if (!productsSnapshot.empty) {
+      if (!childrenSnapshot.empty && cascade !== 'true') {
+        return res.status(400).json({
+          success: false,
+          message: 'Cannot delete category with children. Use cascade=true to delete all descendants, or reassign children first.'
+        });
+      }
+
+      // Get all descendants if cascade delete
+      const descendantsToDelete = cascade === 'true' ? await getAllDescendants(id) : [];
+
+      // Check if any products use this category or any descendants
+      const categoriesToCheck = [id, ...descendantsToDelete.map(d => d.id)];
+
+      // Check if any products reference these categories via categoryPathIds
+      let hasProducts = false;
+
+      for (const catId of categoriesToCheck) {
+        const productsSnapshot = await db
+          .collection('products')
+          .where('categoryPathIds', 'array-contains', catId)
+          .limit(1)
+          .get();
+
+        if (!productsSnapshot.empty) {
+          hasProducts = true;
+          break;
+        }
+
+        // Also check old categoryId field for backward compatibility
+        const oldProductsSnapshot = await db
+          .collection('products')
+          .where('categoryId', '==', catId)
+          .limit(1)
+          .get();
+
+        if (!oldProductsSnapshot.empty) {
+          hasProducts = true;
+          break;
+        }
+      }
+
+      if (hasProducts) {
         return res.status(400).json({
           success: false,
           message: 'Cannot delete category with associated products. Please delete or reassign products first.'
@@ -249,22 +414,67 @@ export const categoryController = {
 
       if (permanent === 'true') {
         // Permanent deletion
-        await db.collection('categories').doc(id).delete();
+        const batch = db.batch();
+
+        // Delete the category itself
+        batch.delete(db.collection('categories').doc(id));
+
+        // Delete all descendants if cascade
+        if (cascade === 'true') {
+          descendantsToDelete.forEach(descendant => {
+            batch.delete(db.collection('categories').doc(descendant.id));
+          });
+        }
+
+        await batch.commit();
+
+        // Update parent's childrenCount if this category had a parent
+        if (categoryData.parentId) {
+          const newChildrenCount = await getChildrenCount(categoryData.parentId);
+          const isLeaf = newChildrenCount === 0;
+
+          await db.collection('categories').doc(categoryData.parentId).update({
+            childrenCount: newChildrenCount,
+            'metadata.isLeaf': isLeaf,
+            updatedAt: new Date().toISOString()
+          });
+        }
 
         res.status(200).json({
           success: true,
-          message: 'Category permanently deleted'
+          message: cascade === 'true'
+            ? `Category and ${descendantsToDelete.length} descendants permanently deleted`
+            : 'Category permanently deleted',
+          deletedCount: cascade === 'true' ? descendantsToDelete.length + 1 : 1
         });
       } else {
         // Soft delete
-        await db.collection('categories').doc(id).update({
+        const batch = db.batch();
+        const categoryRef = db.collection('categories').doc(id);
+
+        batch.update(categoryRef, {
           isActive: false,
           updatedAt: new Date().toISOString()
         });
 
+        // Soft delete all descendants if cascade
+        if (cascade === 'true') {
+          descendantsToDelete.forEach(descendant => {
+            batch.update(db.collection('categories').doc(descendant.id), {
+              isActive: false,
+              updatedAt: new Date().toISOString()
+            });
+          });
+        }
+
+        await batch.commit();
+
         res.status(200).json({
           success: true,
-          message: 'Category deactivated successfully'
+          message: cascade === 'true'
+            ? `Category and ${descendantsToDelete.length} descendants deactivated successfully`
+            : 'Category deactivated successfully',
+          deactivatedCount: cascade === 'true' ? descendantsToDelete.length + 1 : 1
         });
       }
     } catch (error) {
@@ -518,6 +728,324 @@ export const categoryController = {
       res.status(500).json({
         success: false,
         message: 'Error removing subcategory',
+        error: error.message
+      });
+    }
+  },
+
+  // NEW HIERARCHY METHODS
+
+  // Get category tree (nested hierarchy)
+  getCategoryTree: async (req, res) => {
+    try {
+      const { maxDepth, parentId, includeInactive } = req.query;
+
+      let query = db.collection('categories');
+
+      // Filter by active status if not explicitly including inactive
+      if (includeInactive !== true && includeInactive !== 'true') {
+        query = query.where('isActive', '==', true);
+      }
+
+      const snapshot = await query.get();
+      const categories = [];
+
+      snapshot.forEach(doc => {
+        categories.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+
+      // Build tree structure
+      const tree = buildCategoryTree(
+        categories,
+        parentId || null,
+        maxDepth ? parseInt(maxDepth) : Infinity
+      );
+
+      res.status(200).json({
+        success: true,
+        count: tree.length,
+        data: tree
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching category tree',
+        error: error.message
+      });
+    }
+  },
+
+  // Get direct children of a category
+  getCategoryChildren: async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const childrenSnapshot = await db
+        .collection('categories')
+        .where('parentId', '==', id)
+        .orderBy('displayOrder', 'asc')
+        .get();
+
+      const children = [];
+
+      childrenSnapshot.forEach(doc => {
+        children.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+
+      res.status(200).json({
+        success: true,
+        count: children.length,
+        data: children
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching category children',
+        error: error.message
+      });
+    }
+  },
+
+  // Get all descendants of a category
+  getCategoryDescendants: async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const descendants = await getAllDescendants(id);
+
+      res.status(200).json({
+        success: true,
+        count: descendants.length,
+        data: descendants
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching category descendants',
+        error: error.message
+      });
+    }
+  },
+
+  // Get category with ancestors (breadcrumb)
+  getCategoryAncestors: async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const result = await getCategoryWithAncestors(id);
+
+      res.status(200).json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching category ancestors',
+        error: error.message
+      });
+    }
+  },
+
+  // Move category to a new parent
+  moveCategory: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { newParentId, newDisplayOrder } = req.body;
+
+      // Get current category
+      const categoryDoc = await db.collection('categories').doc(id).get();
+
+      if (!categoryDoc.exists) {
+        return res.status(404).json({
+          success: false,
+          message: 'Category not found'
+        });
+      }
+
+      const categoryData = categoryDoc.data();
+
+      // Validate no circular reference
+      try {
+        await validateNoCircularReference(id, newParentId);
+      } catch (circularError) {
+        return res.status(400).json({
+          success: false,
+          message: circularError.message
+        });
+      }
+
+      // Get new parent data
+      let newParentPath = '';
+      let newParentPathIds = [];
+      let newLevel = 0;
+
+      if (newParentId) {
+        const newParentDoc = await db.collection('categories').doc(newParentId).get();
+
+        if (!newParentDoc.exists) {
+          return res.status(404).json({
+            success: false,
+            message: 'New parent category not found'
+          });
+        }
+
+        const newParentData = newParentDoc.data();
+        newParentPath = newParentData.path || `/${newParentData.categorySlug}`;
+        newParentPathIds = newParentData.pathIds || [newParentId];
+        newLevel = (newParentData.level || 0) + 1;
+      }
+
+      // Build new path and pathIds
+      const newPath = buildCategoryPath(categoryData.categorySlug, newParentPath);
+      const newPathIds = buildPathIds(id, newParentPathIds);
+
+      // Update category
+      const updateData = {
+        parentId: newParentId || null,
+        path: newPath,
+        pathIds: newPathIds,
+        level: newLevel,
+        updatedAt: new Date().toISOString()
+      };
+
+      if (newDisplayOrder !== undefined) {
+        updateData.displayOrder = parseInt(newDisplayOrder);
+      }
+
+      await db.collection('categories').doc(id).update(updateData);
+
+      // Update all descendants' paths
+      await updateDescendantPaths(id, newPath, newPathIds);
+
+      // Update old parent's childrenCount
+      if (categoryData.parentId) {
+        const oldParentChildrenCount = await getChildrenCount(categoryData.parentId);
+        await db.collection('categories').doc(categoryData.parentId).update({
+          childrenCount: oldParentChildrenCount,
+          'metadata.isLeaf': oldParentChildrenCount === 0,
+          updatedAt: new Date().toISOString()
+        });
+      }
+
+      // Update new parent's childrenCount
+      if (newParentId) {
+        const newParentChildrenCount = await getChildrenCount(newParentId);
+        await db.collection('categories').doc(newParentId).update({
+          childrenCount: newParentChildrenCount,
+          'metadata.isLeaf': false,
+          updatedAt: new Date().toISOString()
+        });
+      }
+
+      // Get updated category
+      const updatedDoc = await db.collection('categories').doc(id).get();
+
+      res.status(200).json({
+        success: true,
+        message: 'Category moved successfully',
+        data: {
+          id: updatedDoc.id,
+          ...updatedDoc.data()
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error moving category',
+        error: error.message
+      });
+    }
+  },
+
+  // Reorder multiple categories
+  reorderCategories: async (req, res) => {
+    try {
+      const { updates } = req.body;
+
+      if (!updates || !Array.isArray(updates) || updates.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Updates array is required'
+        });
+      }
+
+      const batch = db.batch();
+
+      for (const update of updates) {
+        const { id, displayOrder } = update;
+
+        if (!id || displayOrder === undefined) {
+          continue;
+        }
+
+        const categoryRef = db.collection('categories').doc(id);
+        batch.update(categoryRef, {
+          displayOrder: parseInt(displayOrder),
+          updatedAt: new Date().toISOString()
+        });
+      }
+
+      await batch.commit();
+
+      res.status(200).json({
+        success: true,
+        message: `${updates.length} categories reordered successfully`,
+        updatedCount: updates.length
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error reordering categories',
+        error: error.message
+      });
+    }
+  },
+
+  // Get categories by level
+  getCategoriesByLevel: async (req, res) => {
+    try {
+      const { level } = req.params;
+      const levelNum = parseInt(level);
+
+      if (isNaN(levelNum) || levelNum < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Level must be a non-negative integer'
+        });
+      }
+
+      const snapshot = await db
+        .collection('categories')
+        .where('level', '==', levelNum)
+        .orderBy('displayOrder', 'asc')
+        .get();
+
+      const categories = [];
+
+      snapshot.forEach(doc => {
+        categories.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+
+      res.status(200).json({
+        success: true,
+        count: categories.length,
+        level: levelNum,
+        data: categories
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Error fetching categories by level',
         error: error.message
       });
     }

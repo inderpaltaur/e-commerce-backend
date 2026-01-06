@@ -26,11 +26,20 @@ export const createProductSchema = z.object({
       .min(1, 'Product description is required')
       .max(2000, 'Product description must not exceed 2000 characters'),
 
+    // NEW: Dynamic category reference (preferred)
+    categoryId: z.string()
+      .min(1, 'Category ID is required')
+      .optional(),
+
+    categoryPath: z.string().optional(), // Auto-populated by backend
+    categoryPathIds: z.array(z.string()).optional(), // Auto-populated by backend
+
+    // OLD: Legacy category fields (for backward compatibility)
     category: z.enum(['men', 'women', 'kids', 'unisex'], {
       errorMap: () => ({ message: 'Category must be one of: men, women, kids, unisex' })
-    }),
+    }).optional(),
 
-    subCategory: z.string().min(1, 'Subcategory is required'),
+    subCategory: z.string().optional(),
 
     productType: z.string().min(1, 'Product type is required'),
 
@@ -98,7 +107,13 @@ export const createProductSchema = z.object({
       .or(z.string().transform(val => val === 'true'))
       .default(false)
       .optional()
-  })
+  }).refine(
+    (data) => data.categoryId || data.category,
+    {
+      message: 'Either categoryId (new format) or category (legacy format) must be provided',
+      path: ['categoryId']
+    }
+  )
 });
 
 // Update product schema (all fields optional except nothing is required)
@@ -112,6 +127,12 @@ export const updateProductSchema = z.object({
       .max(2000, 'Product description must not exceed 2000 characters')
       .optional(),
 
+    // NEW: Dynamic category reference
+    categoryId: z.string().min(1).optional(),
+    categoryPath: z.string().optional(),
+    categoryPathIds: z.array(z.string()).optional(),
+
+    // OLD: Legacy category fields
     category: z.enum(['men', 'women', 'kids', 'unisex'], {
       errorMap: () => ({ message: 'Category must be one of: men, women, kids, unisex' })
     }).optional(),
