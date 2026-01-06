@@ -55,7 +55,16 @@ export const getAllUsersQuerySchema = z.object({
 
     accountStatus: z.enum(['active', 'blocked', 'suspended']).optional(),
 
-    role: z.enum(['customer', 'admin', 'super_admin']).optional()
+    role: z.string()
+      .optional()
+      .refine((val) => {
+        if (!val) return true;
+        const roles = val.split(',').map(r => r.trim());
+        const validRoles = ['customer', 'admin', 'super_admin'];
+        return roles.every(role => validRoles.includes(role));
+      }, {
+        message: 'Role must be one of: customer, admin, super_admin, or comma-separated combination'
+      })
   })
 });
 
