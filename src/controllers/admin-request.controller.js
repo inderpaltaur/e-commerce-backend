@@ -187,20 +187,21 @@ export const getAdminRequests = async (req, res) => {
   try {
     const { status, limit = 50 } = req.query;
 
-    let query = db.collection('adminRequests');
-
-    if (status) {
-      query = query.where('status', '==', status);
-    }
-
-    query = query.orderBy('requestedAt', 'desc').limit(parseInt(limit));
+    // Fetch all requests ordered by requestedAt desc, then filter in memory
+    // This avoids Firestore index requirements for admin data
+    let query = db.collection('adminRequests').orderBy('requestedAt', 'desc').limit(parseInt(limit));
 
     const snapshot = await query.get();
 
-    const requests = [];
+    let requests = [];
     snapshot.forEach(doc => {
       requests.push(doc.data());
     });
+
+    // Filter by status if provided
+    if (status) {
+      requests = requests.filter(request => request.status === status);
+    }
 
     return res.status(200).json({
       success: true,
