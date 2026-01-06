@@ -133,6 +133,14 @@ router.put(
   categoryController.reorderCategories
 );
 
+// Upload category image
+router.post(
+  '/upload-image',
+  verifyToken,
+  checkAdmin,
+  ...categoryController.uploadCategoryImage
+);
+
 // Subcategory Management Routes (DEPRECATED - use create with parentId instead)
 
 // Add subcategory to a category

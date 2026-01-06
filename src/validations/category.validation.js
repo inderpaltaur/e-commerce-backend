@@ -36,7 +36,18 @@ export const createCategorySchema = z.object({
       .optional(),
 
     imageUrl: z.string()
-      .url('Image URL must be a valid URL')
+      .refine(val => {
+        // Allow empty string for optional field
+        if (!val) return true;
+        // Allow URLs
+        try {
+          new URL(val);
+          return true;
+        } catch {
+          // Allow local paths starting with /
+          return val.startsWith('/');
+        }
+      }, 'Image URL must be a valid URL or local path')
       .optional(),
 
     // NEW: Parent category ID for hierarchy support
@@ -79,7 +90,18 @@ export const updateCategorySchema = z.object({
       .optional(),
 
     imageUrl: z.string()
-      .url('Image URL must be a valid URL')
+      .refine(val => {
+        // Allow empty string for optional field
+        if (!val) return true;
+        // Allow URLs
+        try {
+          new URL(val);
+          return true;
+        } catch {
+          // Allow local paths starting with /
+          return val.startsWith('/');
+        }
+      }, 'Image URL must be a valid URL or local path')
       .optional(),
 
     isActive: z.boolean()
