@@ -40,6 +40,7 @@ import orderRoutes from './routes/order.routes.js';
 import userRoutes from './routes/user.routes.js';
 import adminRequestRoutes from './routes/admin-request.routes.js';
 import setupRoutes from './routes/setup.routes.js';
+import uploadRoutes from './routes/upload.routes.js';
 
 // Use routes
 app.use('/api/setup', setupRoutes);
@@ -49,6 +50,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin-requests', adminRequestRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
