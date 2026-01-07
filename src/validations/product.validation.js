@@ -75,7 +75,8 @@ export const createProductSchema = z.object({
       .min(1, 'At least one color is required'),
 
     images: z.array(z.string().url('Each image must be a valid URL'))
-      .min(1, 'At least one image is required'),
+      .default([])
+      .optional(),
 
     units: z.number()
       .int()
