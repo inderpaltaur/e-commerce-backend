@@ -87,4 +87,11 @@ router.post(
   authController.revokeTokens
 );
 
+// Check authentication status and claims
+router.get(
+  '/me',
+  verifyToken,
+  authController.getCurrentUser
+);
+
 export default router;

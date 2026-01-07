@@ -496,6 +496,44 @@ export const authController = {
         error: error.message
       });
     }
+  },
+
+  // Get current user info with claims
+  getCurrentUser: async (req, res) => {
+    try {
+      const userId = req.user.uid;
+
+      // Get user record from Firebase Auth (includes custom claims)
+      const userRecord = await auth.getUser(userId);
+
+      // Get user data from Firestore
+      const userDoc = await db.collection('users').doc(userId).get();
+      const userData = userDoc.exists ? userDoc.data() : null;
+
+      res.status(200).json({
+        success: true,
+        message: 'User information retrieved successfully',
+        data: {
+          uid: userRecord.uid,
+          email: userRecord.email,
+          displayName: userRecord.displayName,
+          photoURL: userRecord.photoURL,
+          emailVerified: userRecord.emailVerified,
+          customClaims: userRecord.customClaims || {},
+          firestoreData: userData,
+          hasAdminAccess: !!(userRecord.customClaims?.admin || userRecord.customClaims?.super_admin),
+          role: userRecord.customClaims?.super_admin ? 'super_admin' :
+                userRecord.customClaims?.admin ? 'admin' :
+                userData?.role || 'customer'
+        }
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get user information',
+        error: error.message
+      });
+    }
   }
 };
 

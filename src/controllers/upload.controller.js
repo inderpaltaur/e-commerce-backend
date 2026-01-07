@@ -100,6 +100,17 @@ export const uploadProductImage = async (req, res) => {
 
   } catch (error) {
     console.error('Upload error:', error);
+
+    // Check if it's a bucket not found error
+    if (error.message && error.message.includes('bucket does not exist')) {
+      return res.status(500).json({
+        success: false,
+        message: 'Firebase Storage bucket not configured',
+        error: 'The storage bucket does not exist. Please enable Firebase Storage in Firebase Console.',
+        hint: 'Go to Firebase Console > Storage > Get Started to enable Firebase Storage for your project.'
+      });
+    }
+
     res.status(500).json({
       success: false,
       message: 'Error uploading image',
@@ -173,6 +184,17 @@ export const uploadProductImages = async (req, res) => {
 
   } catch (error) {
     console.error('Multiple upload error:', error);
+
+    // Check if it's a bucket not found error
+    if (error.message && error.message.includes('bucket does not exist')) {
+      return res.status(500).json({
+        success: false,
+        message: 'Firebase Storage bucket not configured',
+        error: 'The storage bucket does not exist. Please enable Firebase Storage in Firebase Console.',
+        hint: 'Go to Firebase Console > Storage > Get Started to enable Firebase Storage for your project.'
+      });
+    }
+
     res.status(500).json({
       success: false,
       message: 'Error uploading images',
