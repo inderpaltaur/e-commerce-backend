@@ -4,7 +4,10 @@ import { z } from 'zod';
 const colorSchema = z.object({
   colorName: z.string().min(1, 'Color name is required'),
   colorCode: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Color code must be a valid hex color (e.g., #FFFFFF)'),
-  colorImage: z.string().url('Color image must be a valid URL').optional(),
+  colorImage: z.string().refine((val) => {
+    // Allow full URLs or relative URLs starting with /uploads/
+    return /^https?:\/\//.test(val) || /^\/uploads\//.test(val);
+  }, 'Color image must be a valid URL or a relative path starting with /uploads/').optional(),
   stock: z.number().int().min(0, 'Stock must be a non-negative integer')
 });
 
@@ -74,7 +77,10 @@ export const createProductSchema = z.object({
     colors: z.array(colorSchema)
       .min(1, 'At least one color is required'),
 
-    images: z.array(z.string().url('Each image must be a valid URL'))
+    images: z.array(z.string().refine((val) => {
+      // Allow full URLs or relative URLs starting with /uploads/
+      return /^https?:\/\//.test(val) || /^\/uploads\//.test(val);
+    }, 'Each image must be a valid URL or a relative path starting with /uploads/'))
       .default([])
       .optional(),
 
@@ -170,7 +176,10 @@ export const updateProductSchema = z.object({
 
     colors: z.array(colorSchema).optional(),
 
-    images: z.array(z.string().url('Each image must be a valid URL')).optional(),
+    images: z.array(z.string().refine((val) => {
+      // Allow full URLs or relative URLs starting with /uploads/
+      return /^https?:\/\//.test(val) || /^\/uploads\//.test(val);
+    }, 'Each image must be a valid URL or a relative path starting with /uploads/')).optional(),
 
     units: z.number()
       .int()

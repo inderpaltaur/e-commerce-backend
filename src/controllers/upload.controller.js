@@ -1,9 +1,25 @@
 import multer from 'multer';
-import { storage as firebaseStorage } from '../config/firebase.js';
 import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 
-// Configure multer for memory storage
-const storage = multer.memoryStorage();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Configure multer for disk storage
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadPath = path.join(process.cwd(), 'uploads/products');
+    fs.mkdirSync(uploadPath, { recursive: true });
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    const timestamp = Date.now();
+    const ext = path.extname(file.originalname);
+    const filename = `product-${timestamp}-${Math.random().toString(36).substring(7)}${ext}`;
+    cb(null, filename);
+  }
+});
 
 // File filter for images
 const fileFilter = (req, file, cb) => {
@@ -28,7 +44,7 @@ export const upload = multer({
 });
 
 /**
- * Upload single product image to Firebase Storage
+ * Upload single product image to local storage
  */
 export const uploadProductImage = async (req, res) => {
   try {
@@ -40,77 +56,19 @@ export const uploadProductImage = async (req, res) => {
     }
 
     const file = req.file;
-    const bucket = firebaseStorage.bucket();
 
-    // Generate unique filename
-    const timestamp = Date.now();
-    const filename = `products/${timestamp}-${file.originalname}`;
+    // Generate full URL
+    const imageUrl = `${process.env.BASE_URL}/uploads/products/${file.filename}`;
 
-    // Create file reference
-    const fileUpload = bucket.file(filename);
-
-    // Create write stream
-    const stream = fileUpload.createWriteStream({
-      metadata: {
-        contentType: file.mimetype,
-        metadata: {
-          firebaseStorageDownloadTokens: timestamp,
-        },
-      },
-      public: true,
+    res.status(200).json({
+      success: true,
+      message: 'Image uploaded successfully',
+      imageUrl: imageUrl,
+      filename: file.filename
     });
-
-    // Handle upload errors
-    stream.on('error', (error) => {
-      console.error('Firebase Storage upload error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Error uploading image to Firebase Storage',
-        error: error.message
-      });
-    });
-
-    // Handle upload success
-    stream.on('finish', async () => {
-      try {
-        // Make file public
-        await fileUpload.makePublic();
-
-        // Get public URL
-        const publicUrl = `https://storage.googleapis.com/${bucket.name}/${filename}`;
-
-        res.status(200).json({
-          success: true,
-          message: 'Image uploaded successfully',
-          imageUrl: publicUrl,
-          filename: filename
-        });
-      } catch (error) {
-        console.error('Error making file public:', error);
-        res.status(500).json({
-          success: false,
-          message: 'Error generating public URL',
-          error: error.message
-        });
-      }
-    });
-
-    // Write buffer to stream
-    stream.end(file.buffer);
 
   } catch (error) {
     console.error('Upload error:', error);
-
-    // Check if it's a bucket not found error
-    if (error.message && error.message.includes('bucket does not exist')) {
-      return res.status(500).json({
-        success: false,
-        message: 'Firebase Storage bucket not configured',
-        error: 'The storage bucket does not exist. Please enable Firebase Storage in Firebase Console.',
-        hint: 'Go to Firebase Console > Storage > Get Started to enable Firebase Storage for your project.'
-      });
-    }
-
     res.status(500).json({
       success: false,
       message: 'Error uploading image',
@@ -120,7 +78,7 @@ export const uploadProductImage = async (req, res) => {
 };
 
 /**
- * Upload multiple product images to Firebase Storage
+ * Upload multiple product images to local storage
  */
 export const uploadProductImages = async (req, res) => {
   try {
@@ -131,50 +89,10 @@ export const uploadProductImages = async (req, res) => {
       });
     }
 
-    const bucket = firebaseStorage.bucket();
-    const uploadPromises = [];
-
-    for (const file of req.files) {
-      const timestamp = Date.now();
-      const filename = `products/${timestamp}-${Math.random().toString(36).substring(7)}-${file.originalname}`;
-
-      const uploadPromise = new Promise((resolve, reject) => {
-        const fileUpload = bucket.file(filename);
-
-        const stream = fileUpload.createWriteStream({
-          metadata: {
-            contentType: file.mimetype,
-            metadata: {
-              firebaseStorageDownloadTokens: timestamp,
-            },
-          },
-          public: true,
-        });
-
-        stream.on('error', (error) => {
-          reject(error);
-        });
-
-        stream.on('finish', async () => {
-          try {
-            await fileUpload.makePublic();
-            const publicUrl = `https://storage.googleapis.com/${bucket.name}/${filename}`;
-            resolve({
-              imageUrl: publicUrl,
-              filename: filename
-            });
-          } catch (error) {
-            reject(error);
-          }
-        });
-
-        stream.end(file.buffer);
-      });
-
-      uploadPromises.push(uploadPromise);
-    }
-
-    const uploadedImages = await Promise.all(uploadPromises);
+    const uploadedImages = req.files.map(file => ({
+      imageUrl: `${process.env.BASE_URL}/uploads/products/${file.filename}`,
+      filename: file.filename
+    }));
 
     res.status(200).json({
       success: true,
@@ -184,17 +102,6 @@ export const uploadProductImages = async (req, res) => {
 
   } catch (error) {
     console.error('Multiple upload error:', error);
-
-    // Check if it's a bucket not found error
-    if (error.message && error.message.includes('bucket does not exist')) {
-      return res.status(500).json({
-        success: false,
-        message: 'Firebase Storage bucket not configured',
-        error: 'The storage bucket does not exist. Please enable Firebase Storage in Firebase Console.',
-        hint: 'Go to Firebase Console > Storage > Get Started to enable Firebase Storage for your project.'
-      });
-    }
-
     res.status(500).json({
       success: false,
       message: 'Error uploading images',
@@ -204,7 +111,7 @@ export const uploadProductImages = async (req, res) => {
 };
 
 /**
- * Delete image from Firebase Storage
+ * Delete image from local storage
  */
 export const deleteImage = async (req, res) => {
   try {
@@ -217,10 +124,18 @@ export const deleteImage = async (req, res) => {
       });
     }
 
-    const bucket = firebaseStorage.bucket();
-    const file = bucket.file(filename);
+    const filePath = path.join(__dirname, '../../uploads/products', filename);
 
-    await file.delete();
+    // Check if file exists
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: 'Image file not found'
+      });
+    }
+
+    // Delete the file
+    fs.unlinkSync(filePath);
 
     res.status(200).json({
       success: true,

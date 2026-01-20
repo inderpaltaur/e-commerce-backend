@@ -34,7 +34,7 @@ router.post(
 
 /**
  * @route   DELETE /api/upload/image
- * @desc    Delete image from Firebase Storage
+ * @desc    Delete image from local storage
  * @access  Private/Admin
  */
 router.delete(
